@@ -1,0 +1,50 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python virtual environments & packages
+venv/
+.venv/
+env/
+ENV/
+
+# Python compilation & caching
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Local databases, data files & logs
+data/gym_management.db
+data/ai_config.json
+data/backups/
+test_gym.db
+test_temp.db
+*.db
+*.sqlite
+*.log
+
+# Build & compilation outputs
+dist/
+build/
+out/
+bin/
+obj/
+frontend/dist/
+
+# Environment files / secrets
+.env
+.env.*
+!.env.example
+
+# IDEs and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

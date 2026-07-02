@@ -1,0 +1,148 @@
+import React, { useState } from 'react';
+import { Radio, Sparkles, Unlock, Lock } from 'lucide-react';
+
+interface HeaderProps {
+  title: string;
+  readerConnected: boolean;
+  doorUnlocked: boolean;
+  onManualOverride: () => Promise<void>;
+  isAiOpen: boolean;
+  onToggleAi: () => void;
+  adminName: string;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  title,
+  readerConnected,
+  doorUnlocked,
+  onManualOverride,
+  isAiOpen,
+  onToggleAi,
+  adminName
+}) => {
+  const [overrideLoading, setOverrideLoading] = useState(false);
+
+  const handleOverrideClick = async () => {
+    setOverrideLoading(true);
+    try {
+      await onManualOverride();
+    } finally {
+      setOverrideLoading(false);
+    }
+  };
+
+  return (
+    <header className="glass-panel" style={{
+      height: '70px',
+      borderRadius: '0',
+      borderLeft: 'none',
+      borderRight: 'none',
+      borderTop: 'none',
+      borderBottom: 'var(--border-glass)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 2rem',
+      background: 'rgba(15, 23, 42, 0.4)'
+    }}>
+      {/* Title */}
+      <div>
+        <h2 style={{ fontSize: '1.25rem', color: '#fff', textTransform: 'capitalize' }}>
+          {title}
+        </h2>
+      </div>
+
+      {/* Connectivity & Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+        {/* Biometric Reader Status */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          background: 'rgba(255,255,255,0.03)',
+          padding: '0.4rem 0.8rem',
+          borderRadius: 'var(--radius-sm)',
+          border: 'var(--border-glass)',
+          fontSize: '0.8rem'
+        }}>
+          <Radio size={14} style={{ color: readerConnected ? 'var(--accent-success)' : 'var(--accent-danger)' }} />
+          <span style={{ color: 'var(--text-secondary)' }}>Reader:</span>
+          {readerConnected ? (
+            <span style={{ color: 'var(--accent-success)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span className="status-dot status-online" style={{ width: '6px', height: '6px' }}></span>
+              ONLINE
+            </span>
+          ) : (
+            <span style={{ color: 'var(--accent-danger)', fontWeight: '600' }}>OFFLINE</span>
+          )}
+        </div>
+
+        {/* Physical Lock Status */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          background: 'rgba(255,255,255,0.03)',
+          padding: '0.4rem 0.8rem',
+          borderRadius: 'var(--radius-sm)',
+          border: 'var(--border-glass)',
+          fontSize: '0.8rem'
+        }}>
+          {doorUnlocked ? (
+            <Unlock size={14} style={{ color: 'var(--accent-success)' }} />
+          ) : (
+            <Lock size={14} style={{ color: 'var(--text-muted)' }} />
+          )}
+          <span style={{ color: 'var(--text-secondary)' }}>Gate:</span>
+          {doorUnlocked ? (
+            <span style={{ color: 'var(--accent-success)', fontWeight: '600' }}>UNLOCKED</span>
+          ) : (
+            <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>SECURED</span>
+          )}
+        </div>
+
+        {/* Manual Gate Override Button */}
+        <button
+          onClick={handleOverrideClick}
+          className="btn btn-success"
+          style={{
+            padding: '0.45rem 1rem',
+            fontSize: '0.8rem',
+            background: doorUnlocked ? 'var(--accent-success-hover)' : 'var(--accent-success)',
+            boxShadow: doorUnlocked ? 'var(--glow-success)' : 'none'
+          }}
+          disabled={overrideLoading || doorUnlocked}
+        >
+          {overrideLoading ? 'Opening...' : doorUnlocked ? 'Door Open' : 'Manual Override'}
+        </button>
+
+        {/* AI Assistant Toggle Button */}
+        <button
+          onClick={onToggleAi}
+          className={`btn ${isAiOpen ? 'btn-primary' : 'btn-flat'}`}
+          style={{
+            padding: '0.45rem 1rem',
+            fontSize: '0.8rem',
+            boxShadow: isAiOpen ? 'var(--glow-primary)' : 'none'
+          }}
+        >
+          <Sparkles size={14} />
+          AI Assistant
+        </button>
+
+        {/* User Info */}
+        <div style={{
+          borderLeft: 'var(--border-glass)',
+          paddingLeft: '1.25rem',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          gap: '0.1rem'
+        }}>
+          <span style={{ fontSize: '0.85rem', color: '#fff', fontWeight: '500' }}>{adminName}</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Administrator</span>
+        </div>
+      </div>
+    </header>
+  );
+};
