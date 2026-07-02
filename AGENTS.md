@@ -1,6 +1,6 @@
-# Gym Management System - Agent Guidelines
+# BarbellOS - Agent Guidelines
 
-This workspace contains a single-tenant, offline-first desktop Gym Management System.
+This workspace contains a single-tenant, offline-first desktop BarbellOS (Gym Management System).
 
 ## Project Commands
 

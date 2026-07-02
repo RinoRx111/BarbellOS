@@ -21,9 +21,8 @@ htmlcov/
 .mypy_cache/
 
 # Local databases, data files & logs
-data/gym_management.db
-data/ai_config.json
-data/backups/
+data/
+backend/data/
 test_gym.db
 test_temp.db
 *.db

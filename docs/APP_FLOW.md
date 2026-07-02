@@ -1,6 +1,6 @@
 # Application Flow Specification
 
-This document details the step-by-step user journeys and backend execution flows for key actions in the Gym Management System.
+This document details the step-by-step user journeys and backend execution flows for key actions in BarbellOS (Gym Management System).
 
 ---
 

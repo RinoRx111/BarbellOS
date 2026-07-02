@@ -1,6 +1,6 @@
 # UI/UX Brief & Design System
 
-This brief outlines the visual theme, component behaviors, page layouts, and micro-interactions designed to make the Gym Management System interface feel premium, responsive, and state-of-the-art.
+This brief outlines the visual theme, component behaviors, page layouts, and micro-interactions designed to make the BarbellOS (Gym Management System) interface feel premium, responsive, and state-of-the-art.
 
 ---
 

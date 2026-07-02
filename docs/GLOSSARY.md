@@ -1,6 +1,6 @@
 # Project Glossary & AI Assistant Domain Rules
 
-This glossary defines standard business and technical terms used in the Gym Management System. The AI assistant and coding components must adhere to these definitions to ensure consistency.
+This glossary defines standard business and technical terms used in BarbellOS (Gym Management System). The AI assistant and coding components must adhere to these definitions to ensure consistency.
 
 ---
 

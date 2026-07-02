@@ -20,8 +20,8 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="Gym Management System API",
-    description="Offline-first Gym Management System backend",
+    title="BarbellOS API",
+    description="Offline-first BarbellOS backend",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -48,7 +48,7 @@ app.include_router(ai.router, prefix="/api")
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy", "service": "gym-management-backend"}
+    return {"status": "healthy", "service": "barbellos-backend"}
 
 @app.websocket("/ws/attendance")
 async def websocket_attendance(websocket: WebSocket):

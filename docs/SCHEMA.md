@@ -1,6 +1,6 @@
 # Database Schema Specification
 
-This document contains the canonical table definitions for the Gym Management System. The database is a single SQLite file.
+This document contains the canonical table definitions for BarbellOS (Gym Management System). The database is a single SQLite file.
 
 ---
 

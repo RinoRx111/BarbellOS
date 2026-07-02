@@ -11,7 +11,7 @@ from app.models import ChatMessage, Member, Plan, GymSettings
 def build_system_prompt(session: Session) -> str:
     today_str = date.today().isoformat()
     gym = session.exec(select(GymSettings)).first()
-    gym_name = gym.gym_name if gym else "Gym System"
+    gym_name = gym.gym_name if gym else "BarbellOS"
     
     # Load all members and plans to supply as context for name & ID resolution
     members = session.exec(select(Member)).all()
@@ -20,7 +20,7 @@ def build_system_prompt(session: Session) -> str:
     members_context = "\n".join([f"- ID: {m.id}, Name: {m.name}, Phone: {m.phone}, Status: {m.status}, Expiry: {m.expiry_date.isoformat()}" for m in members])
     plans_context = "\n".join([f"- ID: {p.id}, Name: {p.name}, Price: INR {p.price}, Duration: {p.duration_days} days" for p in plans])
     
-    return f"""You are the AI assistant for "{gym_name}", a local Gym Management System. Today's date is {today_str}.
+    return f"""You are the AI assistant for "{gym_name}", a local BarbellOS deployment. Today's date is {today_str}.
     
     You have direct read-only access to the gym data via tools.
     You can propose write operations (members registration, plan renewals, freezes) which will be sent to the owner for approval.
