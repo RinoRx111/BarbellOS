@@ -36,6 +36,10 @@ out/
 bin/
 obj/
 frontend/dist/
+backend/build_temp/
+backend/dist/
+dist_installer/
+*.spec
 
 # Environment files / secrets
 .env

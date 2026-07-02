@@ -8,11 +8,51 @@
     "dev:backend": "python -m uvicorn app.main:app --reload --app-dir backend",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"cross-env NODE_ENV=development electron .\"",
     "install:all": "npm install && npm install --prefix frontend",
-    "electron:start": "electron ."
+    "electron:start": "electron .",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "python backend/build_backend.py",
+    "dist": "electron-builder"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.barbellos.app",
+    "productName": "BarbellOS",
+    "directories": {
+      "output": "dist_installer"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/dist/main.exe",
+        "to": "app_backend/main.exe"
+      }
+    ],
+    "win": {
+      "icon": "electron/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BarbellOS"
+    }
   }
 }
