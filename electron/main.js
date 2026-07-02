@@ -21,7 +21,11 @@ function createWindow() {
     show: false, // Hide until ready to show to prevent white flash
   });
 
+  // Remove the default File/Edit/View/Window/Help menu bar
+  mainWindow.removeMenu();
+
   mainWindow.maximize();
+
 
   const isDev = process.env.NODE_ENV === 'development';
 
