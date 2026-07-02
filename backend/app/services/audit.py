@@ -1,7 +1,9 @@
 import os
 from datetime import datetime
+from app.config import settings
 
-AUDIT_FILE = os.path.join("data", "audit.log")
+AUDIT_FILE = os.path.join(settings.USER_DATA_DIR, "audit.log")
+
 
 def log_audit(action: str, details: str, via: str = "manual"):
     os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)

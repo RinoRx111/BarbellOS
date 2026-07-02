@@ -2,7 +2,8 @@ import os
 import json
 from app.config import settings
 
-CONFIG_FILE = os.path.join("data", "ai_config.json")
+CONFIG_FILE = os.path.join(settings.USER_DATA_DIR, "ai_config.json")
+
 
 def get_ai_config() -> dict:
     # Pre-create directory if needed
