@@ -2,30 +2,30 @@
 
 :root {
   /* Color Palette - Default Dark Theme */
-  --bg-dark: #0B0C0E;
-  --surface-dark: rgba(50, 72, 83, 0.5);
-  --surface-dark-solid: #324853;
-  --surface-light: rgba(85, 73, 121, 0.1);
+  --bg-dark: #080603;
+  --surface-dark: rgba(33, 94, 44, 0.5);
+  --surface-dark-solid: #215E2C;
+  --surface-light: rgba(49, 140, 100, 0.1);
   
-  --accent-primary: #9B9C5E;
-  --accent-primary-hover: #85864f;
-  --accent-success: #9B9C5E;
-  --accent-success-hover: #85864f;
+  --accent-primary: #B59040;
+  --accent-primary-hover: #9E7C34;
+  --accent-success: #B59040;
+  --accent-success-hover: #9E7C34;
   --accent-danger: #EF4444;
   --accent-danger-hover: #DC2626;
-  --accent-warning: #554979;
+  --accent-warning: #318C64;
   
-  --text-primary: #EAFCF0;
-  --text-secondary: rgba(234, 252, 240, 0.7);
-  --text-muted: rgba(234, 252, 240, 0.45);
+  --text-primary: #F5EFE1;
+  --text-secondary: rgba(245, 239, 225, 0.7);
+  --text-muted: rgba(245, 239, 225, 0.45);
   
   /* Borders and Shadows */
-  --border-color: rgba(234, 252, 240, 0.08);
+  --border-color: rgba(245, 239, 225, 0.08);
 
   --border-glass: 1px solid var(--border-color);
   --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-  --glow-primary: 0 0 15px rgba(155, 156, 94, 0.35);
-  --glow-success: 0 0 15px rgba(155, 156, 94, 0.35);
+  --glow-primary: 0 0 15px rgba(181, 144, 64, 0.35);
+  --glow-success: 0 0 15px rgba(181, 144, 64, 0.35);
   --glow-danger: 0 0 15px rgba(239, 68, 68, 0.35);
   
   /* Layout Sizing & Radii */
