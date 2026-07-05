@@ -36,19 +36,19 @@
 }
 
 body.light-theme {
-  /* Color Palette - Custom Light Theme */
+  /* Color Palette - Custom High-Contrast Light Theme */
   --bg-dark: #FCFCF9;
-  --surface-dark: rgba(172, 194, 205, 0.45);
-  --surface-dark-solid: #ACC2CD;
-  --surface-light: rgba(146, 134, 182, 0.08);
+  --surface-dark: rgba(57, 81, 92, 0.45);
+  --surface-dark-solid: #39515C;
+  --surface-light: rgba(76, 63, 112, 0.08);
   
-  --accent-primary: #A1A264;
-  --accent-primary-hover: #898A54;
-  --accent-success: #A1A264;
-  --accent-success-hover: #898A54;
+  --accent-primary: #606135;
+  --accent-primary-hover: #50512B;
+  --accent-success: #606135;
+  --accent-success-hover: #50512B;
   --accent-danger: #DC2626;
   --accent-danger-hover: #B91C1C;
-  --accent-warning: #9286B6;
+  --accent-warning: #4C3F70;
   
   --text-primary: #080805;
   --text-secondary: rgba(8, 8, 5, 0.65);
@@ -57,9 +57,10 @@ body.light-theme {
   /* Borders and Shadows */
   --border-color: rgba(8, 8, 5, 0.12);
   --shadow-glass: 0 8px 32px 0 rgba(8, 8, 5, 0.08);
-  --glow-primary: 0 0 15px rgba(161, 162, 100, 0.35);
-  --glow-success: 0 0 15px rgba(161, 162, 100, 0.35);
+  --glow-primary: 0 0 15px rgba(96, 97, 53, 0.35);
+  --glow-success: 0 0 15px rgba(96, 97, 53, 0.35);
 }
+
 
 
 * {
