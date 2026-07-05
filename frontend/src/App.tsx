@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ClerkProvider, SignIn, SignedIn, SignedOut, useAuth } from '@clerk/clerk-react';
 import { Onboarding } from './components/Onboarding';
 import { LockScreen } from './components/LockScreen';
 import { Sidebar } from './components/Sidebar';
@@ -17,12 +18,16 @@ function App() {
   const [adminName, setAdminName] = useState('Owner');
   const [gymName, setGymName] = useState('Iron Temple Gym');
   const [currentView, setCurrentView] = useState('dashboard');
-
   
+  // Clerk states
+  const [clerkActive, setClerkActive] = useState<boolean>(false);
+  const [clerkPublishableKey, setClerkPublishableKey] = useState<string | null>(null);
+
   // Real-time status indicators
   const [readerConnected] = useState(true);
   const [doorUnlocked, setDoorUnlocked] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
+
 
 
   // Check Onboarding Status on start (with retries to await backend server boot)
@@ -32,8 +37,10 @@ function App() {
 
     while (retries > 0) {
       try {
-        const response = await api.get<{ onboarded: boolean }>('/auth/status');
+        const response = await api.get<any>('/auth/status');
         setOnboarded(response.onboarded);
+        setClerkActive(!!response.clerk_active);
+        setClerkPublishableKey(response.clerk_publishable_key || null);
         if (response.onboarded) {
           // Load settings to fetch gym details
           const settings = await api.get<{ gym_name: string; owner_name: string }>('/settings');
@@ -126,10 +133,6 @@ function App() {
     return <Onboarding onSuccess={() => setOnboarded(true)} />;
   }
 
-  if (!unlocked) {
-    return <LockScreen onUnlock={handleUnlock} />;
-  }
-
   // Render the selected module view
   const renderView = () => {
     switch (currentView) {
@@ -147,6 +150,30 @@ function App() {
         return <DashboardView />;
     }
   };
+
+  if (clerkActive && clerkPublishableKey) {
+    return (
+      <ClerkProvider publishableKey={clerkPublishableKey}>
+        <ClerkAppWrapper
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          gymName={gymName}
+          readerConnected={readerConnected}
+          doorUnlocked={doorUnlocked}
+          handleManualOverride={handleManualOverride}
+          isAiOpen={isAiOpen}
+          setIsAiOpen={setIsAiOpen}
+          adminName={adminName}
+          renderView={renderView}
+          handleLock={handleLock}
+        />
+      </ClerkProvider>
+    );
+  }
+
+  if (!unlocked) {
+    return <LockScreen onUnlock={handleUnlock} />;
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-dark)' }}>
@@ -189,5 +216,110 @@ function App() {
     </div>
   );
 }
+
+// Clerk Wrapper
+const ClerkAppWrapper: React.FC<{
+  currentView: string;
+  setCurrentView: (v: string) => void;
+  gymName: string;
+  readerConnected: boolean;
+  doorUnlocked: boolean;
+  handleManualOverride: () => Promise<void>;
+  isAiOpen: boolean;
+  setIsAiOpen: (open: boolean) => void;
+  adminName: string;
+  renderView: () => React.ReactNode;
+  handleLock: () => void;
+}> = ({
+  currentView,
+  setCurrentView,
+  gymName,
+  readerConnected,
+  doorUnlocked,
+  handleManualOverride,
+  isAiOpen,
+  setIsAiOpen,
+  adminName,
+  renderView,
+  handleLock
+}) => {
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+
+  useEffect(() => {
+    if (isSignedIn) {
+      getToken().then((token) => {
+        api.setToken(token);
+      });
+    } else {
+      api.setToken(null);
+    }
+  }, [isSignedIn, getToken]);
+
+  if (!isLoaded) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-dark)' }}>
+        <p style={{ color: 'var(--text-primary)' }}>Loading authentication context...</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <SignedOut>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: 'var(--bg-dark)',
+          color: 'var(--text-primary)'
+        }}>
+          <div className="glass-panel" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+            <h2 style={{ color: 'var(--text-primary)', marginBottom: '1rem' }}>BarbellOS Clerk Sign In</h2>
+            <SignIn routing="hash" />
+          </div>
+        </div>
+      </SignedOut>
+      <SignedIn>
+        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-dark)' }}>
+          {/* Sidebar Navigation */}
+          <Sidebar
+            currentView={currentView}
+            onViewChange={setCurrentView}
+            onLock={handleLock}
+            gymName={gymName}
+          />
+
+          {/* Main Container */}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            {/* Header Indicators Bar */}
+            <Header
+              title={currentView}
+              readerConnected={readerConnected}
+              doorUnlocked={doorUnlocked}
+              onManualOverride={handleManualOverride}
+              isAiOpen={isAiOpen}
+              onToggleAi={() => setIsAiOpen(!isAiOpen)}
+              adminName={adminName}
+            />
+
+            {/* View viewport & AI slider split */}
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+              {/* Main Module View viewport */}
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                {renderView()}
+              </div>
+
+              {/* AI Drawer (Slides out from right) */}
+              {isAiOpen && (
+                <AiChatDrawer onClose={() => setIsAiOpen(false)} />
+              )}
+            </div>
+          </div>
+        </div>
+      </SignedIn>
+    </>
+  );
+};
 
 export default App;

@@ -14,8 +14,15 @@ LOGIN_ATTEMPTS = {
 
 @router.get("/status")
 def get_auth_status(session: Session = Depends(get_session)):
+    from app.config import settings
     admin = crud.get_admin_user(session)
-    return {"onboarded": admin is not None}
+    clerk_active = bool(settings.CLERK_PUBLISHABLE_KEY and settings.CLERK_SECRET_KEY)
+    return {
+        "onboarded": admin is not None,
+        "clerk_active": clerk_active,
+        "clerk_publishable_key": settings.CLERK_PUBLISHABLE_KEY if clerk_active else None
+    }
+
 
 @router.post("/setup", response_model=schemas.AdminUserRead)
 def setup_admin(payload: schemas.AdminUserCreate, session: Session = Depends(get_session)):
