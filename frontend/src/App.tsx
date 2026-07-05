@@ -23,23 +23,37 @@ function App() {
   const [doorUnlocked, setDoorUnlocked] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
 
-  // Check Onboarding Status on start
+  // Check Onboarding Status on start (with retries to await backend server boot)
   const checkOnboardStatus = async () => {
-    try {
-      const response = await api.get<{ onboarded: boolean }>('/auth/status');
-      setOnboarded(response.onboarded);
-      if (response.onboarded) {
-        // Load settings to fetch gym details
-        const settings = await api.get<{ gym_name: string; owner_name: string }>('/settings');
-        if (settings) {
-          setGymName(settings.gym_name);
-          setAdminName(settings.owner_name);
+    let retries = 15;
+    const delay = 500; // ms
+
+    while (retries > 0) {
+      try {
+        const response = await api.get<{ onboarded: boolean }>('/auth/status');
+        setOnboarded(response.onboarded);
+        if (response.onboarded) {
+          // Load settings to fetch gym details
+          const settings = await api.get<{ gym_name: string; owner_name: string }>('/settings');
+          if (settings) {
+            setGymName(settings.gym_name);
+            setAdminName(settings.owner_name);
+          }
+        }
+        return; // Success, exit retry loop
+      } catch (e) {
+        retries -= 1;
+        if (retries === 0) {
+          console.error("Failed to connect to backend after multiple retries.", e);
+          setOnboarded(false);
+        } else {
+          // Wait before retrying
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
-    } catch (e) {
-      setOnboarded(false);
     }
   };
+
 
   useEffect(() => {
     checkOnboardStatus();
