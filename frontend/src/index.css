@@ -1,30 +1,30 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Color Palette */
-  --bg-dark: #0B0F19;
-  --surface-dark: rgba(22, 29, 48, 0.75);
-  --surface-dark-solid: #161D30;
-  --surface-light: rgba(255, 255, 255, 0.03);
+  /* Color Palette - Default Dark Theme */
+  --bg-dark: #0B0C0E;
+  --surface-dark: rgba(50, 72, 83, 0.5);
+  --surface-dark-solid: #324853;
+  --surface-light: rgba(85, 73, 121, 0.1);
   
-  --accent-primary: #3B82F6;
-  --accent-primary-hover: #2563EB;
-  --accent-success: #10B981;
-  --accent-success-hover: #059669;
+  --accent-primary: #9B9C5E;
+  --accent-primary-hover: #85864f;
+  --accent-success: #9B9C5E;
+  --accent-success-hover: #85864f;
   --accent-danger: #EF4444;
   --accent-danger-hover: #DC2626;
-  --accent-warning: #F59E0B;
+  --accent-warning: #554979;
   
-  --text-primary: #F8FAFC;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
+  --text-primary: #92DAAE;
+  --text-secondary: rgba(146, 218, 174, 0.7);
+  --text-muted: rgba(146, 218, 174, 0.45);
   
   /* Borders and Shadows */
-  --border-color: rgba(255, 255, 255, 0.08);
+  --border-color: rgba(146, 218, 174, 0.08);
   --border-glass: 1px solid var(--border-color);
   --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-  --glow-primary: 0 0 15px rgba(59, 130, 246, 0.35);
-  --glow-success: 0 0 15px rgba(16, 185, 129, 0.35);
+  --glow-primary: 0 0 15px rgba(155, 156, 94, 0.35);
+  --glow-success: 0 0 15px rgba(155, 156, 94, 0.35);
   --glow-danger: 0 0 15px rgba(239, 68, 68, 0.35);
   
   /* Layout Sizing & Radii */
@@ -34,6 +34,33 @@
   --sidebar-width: 250px;
   --chat-drawer-width: 380px;
 }
+
+body.light-theme {
+  /* Color Palette - Custom Light Theme */
+  --bg-dark: #FCFCF9;
+  --surface-dark: rgba(172, 194, 205, 0.45);
+  --surface-dark-solid: #ACC2CD;
+  --surface-light: rgba(146, 134, 182, 0.08);
+  
+  --accent-primary: #A1A264;
+  --accent-primary-hover: #898A54;
+  --accent-success: #A1A264;
+  --accent-success-hover: #898A54;
+  --accent-danger: #DC2626;
+  --accent-danger-hover: #B91C1C;
+  --accent-warning: #9286B6;
+  
+  --text-primary: #080805;
+  --text-secondary: rgba(8, 8, 5, 0.65);
+  --text-muted: rgba(8, 8, 5, 0.45);
+  
+  /* Borders and Shadows */
+  --border-color: rgba(8, 8, 5, 0.12);
+  --shadow-glass: 0 8px 32px 0 rgba(8, 8, 5, 0.08);
+  --glow-primary: 0 0 15px rgba(161, 162, 100, 0.35);
+  --glow-success: 0 0 15px rgba(161, 162, 100, 0.35);
+}
+
 
 * {
   box-sizing: border-box;

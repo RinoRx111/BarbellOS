@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Radio, Sparkles, Unlock, Lock } from 'lucide-react';
+import { Radio, Sparkles, Unlock, Lock, Sun, Moon } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
@@ -9,6 +9,8 @@ interface HeaderProps {
   isAiOpen: boolean;
   onToggleAi: () => void;
   adminName: string;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,9 +20,12 @@ export const Header: React.FC<HeaderProps> = ({
   onManualOverride,
   isAiOpen,
   onToggleAi,
-  adminName
+  adminName,
+  theme,
+  onToggleTheme
 }) => {
   const [overrideLoading, setOverrideLoading] = useState(false);
+
 
   const handleOverrideClick = async () => {
     setOverrideLoading(true);
@@ -43,23 +48,49 @@ export const Header: React.FC<HeaderProps> = ({
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '0 2rem',
-      background: 'rgba(15, 23, 42, 0.4)'
+      background: 'var(--surface-dark)'
     }}>
       {/* Title */}
       <div>
-        <h2 style={{ fontSize: '1.25rem', color: '#fff', textTransform: 'capitalize' }}>
+        <h2 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', textTransform: 'capitalize' }}>
           {title}
         </h2>
       </div>
 
       {/* Connectivity & Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+        
+        {/* Theme Switcher Toggle Button */}
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          className="btn btn-flat"
+          style={{
+            padding: '0.45rem',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '32px',
+            height: '32px',
+            cursor: 'pointer',
+            borderColor: 'var(--border-color)'
+          }}
+          title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+        >
+          {theme === 'dark' ? (
+            <Sun size={14} style={{ color: 'var(--accent-primary)' }} />
+          ) : (
+            <Moon size={14} style={{ color: 'var(--accent-primary)' }} />
+          )}
+        </button>
+
         {/* Biometric Reader Status */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'rgba(255,255,255,0.02)',
           padding: '0.4rem 0.8rem',
           borderRadius: 'var(--radius-sm)',
           border: 'var(--border-glass)',
@@ -82,7 +113,7 @@ export const Header: React.FC<HeaderProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'rgba(255,255,255,0.02)',
           padding: '0.4rem 0.8rem',
           borderRadius: 'var(--radius-sm)',
           border: 'var(--border-glass)',
@@ -139,10 +170,11 @@ export const Header: React.FC<HeaderProps> = ({
           alignItems: 'flex-start',
           gap: '0.1rem'
         }}>
-          <span style={{ fontSize: '0.85rem', color: '#fff', fontWeight: '500' }}>{adminName}</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '500' }}>{adminName}</span>
           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Administrator</span>
         </div>
       </div>
     </header>
   );
+
 };

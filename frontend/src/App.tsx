@@ -17,11 +17,25 @@ function App() {
   const [adminName, setAdminName] = useState('Owner');
   const [gymName, setGymName] = useState('Iron Temple Gym');
   const [currentView, setCurrentView] = useState('dashboard');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('barbellos_theme');
+    return (saved === 'light') ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+    localStorage.setItem('barbellos_theme', theme);
+  }, [theme]);
   
   // Real-time status indicators
   const [readerConnected] = useState(true);
   const [doorUnlocked, setDoorUnlocked] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
+
 
   // Check Onboarding Status on start (with retries to await backend server boot)
   const checkOnboardStatus = async () => {
@@ -167,7 +181,10 @@ function App() {
           isAiOpen={isAiOpen}
           onToggleAi={() => setIsAiOpen(!isAiOpen)}
           adminName={adminName}
+          theme={theme}
+          onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
         />
+
 
         {/* View viewport & AI slider split */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
