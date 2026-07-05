@@ -4,7 +4,10 @@ from sqlmodel import Session, select, func
 from app.db import get_session
 from app.models import Member, Payment, Expense, Attendance
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+from app.auth import get_current_session
+
+router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_session)])
+
 
 @router.get("")
 def get_dashboard_data(session: Session = Depends(get_session)):

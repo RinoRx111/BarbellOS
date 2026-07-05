@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 
 interface LockScreenProps {
-  onUnlock: (adminName: string) => void;
+  onUnlock: (adminName: string, token: string) => void;
 }
 
 export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
@@ -47,19 +47,22 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
       return;
     }
 
-    setLoading(false);
+    setLoading(true);
     setError('');
 
     try {
-      const response = await api.post<{ status: string; name: string }>('/auth/login', { pin });
+      const response = await api.post<{ status: string; name: string; token: string }>('/auth/login', { pin });
       if (response.status === 'unlocked') {
-        onUnlock(response.name);
+        onUnlock(response.name, response.token);
       }
     } catch (err: any) {
       setPin('');
       setError(err.detail || err.message || 'Incorrect PIN entered.');
+    } finally {
+      setLoading(false);
     }
   };
+
 
   // Trigger login automatically if PIN reaches 6 digits
   useEffect(() => {

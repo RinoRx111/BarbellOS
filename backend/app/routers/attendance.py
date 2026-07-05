@@ -7,7 +7,10 @@ from app.models import Attendance, Member
 from app import crud, schemas
 from app.services.websocket_manager import manager
 
-router = APIRouter(prefix="/attendance", tags=["attendance"])
+from app.auth import get_current_session
+
+router = APIRouter(prefix="/attendance", tags=["attendance"], dependencies=[Depends(get_current_session)])
+
 
 @router.get("", response_model=List[schemas.AttendanceRead])
 def read_attendance(limit: int = 100, session: Session = Depends(get_session)):
@@ -106,18 +109,56 @@ async def general_manual_override(session: Session = Depends(get_session)):
 
 @router.post("/scan")
 async def scan_credential(payload: schemas.ScanPayload, session: Session = Depends(get_session)):
-    member = crud.get_member_by_card_or_template(
-        session,
-        card_id=payload.card_id,
-        template_id=payload.biometric_template_id
-    )
+    from app.models import GymSettings
     
-    if not member:
+    gym_settings = session.exec(select(GymSettings)).first()
+    policy = gym_settings.access_policy if gym_settings else "fail_closed"
+    
+    try:
+        member = crud.get_member_by_card_or_template(
+            session,
+            card_id=payload.card_id,
+            template_id=payload.biometric_template_id
+        )
+    except Exception as e:
+        # Hardware/lookup error case
+        access_granted = (policy == "fail_open")
         log = crud.log_attendance(
             session,
             member_id=None,
             check_in_method=payload.method,
-            access_granted=False
+            access_granted=access_granted
+        )
+        
+        event_data = {
+            "event": "attendance",
+            "log": {
+                "id": log.id,
+                "member_id": None,
+                "member_name": "System/Hardware Error",
+                "check_in_time": log.check_in_time.isoformat(),
+                "check_in_method": payload.method,
+                "access_granted": access_granted,
+                "member_status": "error",
+                "duplicate": False
+            }
+        }
+        await manager.broadcast(event_data)
+        
+        return {
+            "access_granted": access_granted,
+            "reason": f"System error: {str(e)}" if not access_granted else "Access Granted (Fail-Open)",
+            "member_name": "System/Hardware Error",
+            "duplicate": False
+        }
+    
+    if not member:
+        access_granted = (policy == "fail_open")
+        log = crud.log_attendance(
+            session,
+            member_id=None,
+            check_in_method=payload.method,
+            access_granted=access_granted
         )
         
         event_data = {
@@ -128,7 +169,7 @@ async def scan_credential(payload: schemas.ScanPayload, session: Session = Depen
                 "member_name": "Unknown Guest",
                 "check_in_time": log.check_in_time.isoformat(),
                 "check_in_method": payload.method,
-                "access_granted": False,
+                "access_granted": access_granted,
                 "member_status": "unrecognized",
                 "duplicate": False
             }
@@ -136,8 +177,8 @@ async def scan_credential(payload: schemas.ScanPayload, session: Session = Depen
         await manager.broadcast(event_data)
         
         return {
-            "access_granted": False,
-            "reason": "Unrecognized credential",
+            "access_granted": access_granted,
+            "reason": "Unrecognized credential" if not access_granted else "Access Granted (Fail-Open)",
             "member_name": "Unknown Guest",
             "duplicate": False
         }
@@ -195,3 +236,4 @@ async def scan_credential(payload: schemas.ScanPayload, session: Session = Depen
         "member_name": member.name,
         "duplicate": is_duplicate
     }
+

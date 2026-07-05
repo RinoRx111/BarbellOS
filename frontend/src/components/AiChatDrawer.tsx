@@ -55,7 +55,8 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
         // AI proposed a write transaction
         setPendingAction({
           action: res.action,
-          params: res.params
+          params: res.params,
+          confirm_id: res.confirm_id
         });
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: res.message || 'An error occurred.' }]);
@@ -72,8 +73,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
     setLoading(true);
     try {
       const res = await api.post<any>('/ai/confirm', {
-        action: pendingAction.action,
-        params: pendingAction.params
+        confirm_id: pendingAction.confirm_id
       });
       setMessages(prev => [...prev, { role: 'assistant', content: res.message }]);
       setPendingAction(null);
@@ -83,6 +83,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
       setLoading(false);
     }
   };
+
 
   const handleDeclineAction = () => {
     setMessages(prev => [...prev, { role: 'assistant', content: "Proposed action discarded by manager." }]);

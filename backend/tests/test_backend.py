@@ -47,6 +47,13 @@ def client_fixture(session):
     yield client
     app.dependency_overrides.clear()
 
+@pytest.fixture(autouse=True)
+def reset_login_attempts():
+    from app.routers.auth import LOGIN_ATTEMPTS
+    LOGIN_ATTEMPTS["attempts"] = 0
+    LOGIN_ATTEMPTS["locked_until"] = None
+
+
 def test_member_status_and_payment_stacking(session):
     # 1. Create a plan
     plan = crud.create_plan(session, name="Monthly", duration_days=30, price=1000.0)
@@ -135,6 +142,8 @@ def test_api_endpoints_settings_and_auth(client):
     response = client.post("/api/auth/setup", json={"name": "Owner", "pin": "1234"})
     assert response.status_code == 200
     assert response.json()["name"] == "Owner"
+    token = response.json()["token"]
+    assert token is not None
     
     # Auth status should now be true
     response = client.get("/api/auth/status")
@@ -149,12 +158,29 @@ def test_api_endpoints_settings_and_auth(client):
     response = client.post("/api/auth/login", json={"pin": "1234"})
     assert response.status_code == 200
     assert response.json()["status"] == "unlocked"
+    token_login = response.json()["token"]
+    assert token_login is not None
     
     # Login fail
     response = client.post("/api/auth/login", json={"pin": "wrong"})
     assert response.status_code == 401
+    
+    # Verify rate limiting lockout:
+    # 4 more failed attempts (5 total)
+    for _ in range(3):
+        client.post("/api/auth/login", json={"pin": "wrong"})
+    
+    response = client.post("/api/auth/login", json={"pin": "wrong"})
+    assert response.status_code == 429
+    assert "Too many failed attempts" in response.json()["detail"]
 
 def test_dashboard_endpoint(client, session):
+    # Onboard & Login to get token
+    client.post("/api/auth/setup", json={"name": "Owner", "pin": "1234"})
+    login_res = client.post("/api/auth/login", json={"pin": "1234"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
     # 1. Setup plan & member
     plan = crud.create_plan(session, name="Monthly", duration_days=30, price=1000.0)
     join_date = date.today()
@@ -174,7 +200,7 @@ def test_dashboard_endpoint(client, session):
     crud.log_attendance(session, member_id=member.id, check_in_method="biometric", access_granted=True)
     
     # Check dashboard API
-    response = client.get("/api/dashboard")
+    response = client.get("/api/dashboard", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["active_members"] == 1
@@ -207,6 +233,12 @@ def test_database_backup_and_retention(session):
 def test_ai_endpoints_and_history(client, session):
     from datetime import date, timedelta
     
+    # Onboard & Login to get token
+    client.post("/api/auth/setup", json={"name": "Owner", "pin": "1234"})
+    login_res = client.post("/api/auth/login", json={"pin": "1234"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
     # 1. Update AI config
     payload = {
         "provider": "groq",
@@ -215,15 +247,15 @@ def test_ai_endpoints_and_history(client, session):
         "anthropic_key": "ant_testkey",
         "ollama_url": "http://localhost:11434"
     }
-    response = client.post("/api/ai/config", json=payload)
+    response = client.post("/api/ai/config", json=payload, headers=headers)
     assert response.status_code == 200
     
-    # Check config loads
-    response = client.get("/api/ai/config")
+    # Check config loads (and is masked)
+    response = client.get("/api/ai/config", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["provider"] == "groq"
-    assert data["api_key"] == "gsk_testkey"
+    assert data["api_key"] == "...tkey"
     
     # 2. Add message directly
     msg = models.ChatMessage(role="user", content="Hello AI")
@@ -231,7 +263,7 @@ def test_ai_endpoints_and_history(client, session):
     session.commit()
     
     # Check history
-    response = client.get("/api/ai/history")
+    response = client.get("/api/ai/history", headers=headers)
     assert response.status_code == 200
     history = response.json()
     assert len(history) == 1
@@ -247,7 +279,10 @@ def test_ai_endpoints_and_history(client, session):
         join_date=date.today()
     )
     
-    confirm_payload = {
+    # Mock the pending action in PENDING_ACTIONS
+    from app.services.ai import PENDING_ACTIONS
+    confirm_id = "test-ai-confirm-id"
+    PENDING_ACTIONS[confirm_id] = {
         "action": "freeze_member",
         "params": {
             "member_id": member.id,
@@ -255,8 +290,12 @@ def test_ai_endpoints_and_history(client, session):
             "frozen_until": (date.today() + timedelta(days=10)).isoformat()
         }
     }
+
+    confirm_payload = {
+        "confirm_id": confirm_id
+    }
     
-    response = client.post("/api/ai/confirm", json=confirm_payload)
+    response = client.post("/api/ai/confirm", json=confirm_payload, headers=headers)
     assert response.status_code == 200
     res_data = response.json()
     assert "Successfully executed action" in res_data["message"]
@@ -264,6 +303,7 @@ def test_ai_endpoints_and_history(client, session):
     # Verify member status is frozen
     session.refresh(member)
     assert member.status == "frozen"
+
 
 
 

@@ -59,7 +59,8 @@ function App() {
     checkOnboardStatus();
   }, []);
 
-  const handleUnlock = (name: string) => {
+  const handleUnlock = (name: string, token: string) => {
+    api.setToken(token);
     setAdminName(name);
     setUnlocked(true);
     // Reload settings
@@ -71,8 +72,10 @@ function App() {
   };
 
   const handleLock = () => {
+    api.setToken(null);
     setUnlocked(false);
   };
+
 
   const handleManualOverride = async () => {
     try {

@@ -3,6 +3,40 @@ from typing import List, Optional
 from sqlmodel import Session, select, func
 from app.models import GymSettings, AdminUser, Plan, Member, Payment, Attendance, Expense
 from app.auth import hash_pin
+import base64
+import hashlib
+from cryptography.fernet import Fernet
+from app.config import settings
+
+def get_fernet() -> Fernet:
+    key_bytes = settings.SECRET_KEY.encode("utf-8")
+    hashed = hashlib.sha256(key_bytes).digest()
+    fernet_key = base64.urlsafe_b64encode(hashed)
+    return Fernet(fernet_key)
+
+def encrypt_val(val: Optional[str]) -> Optional[str]:
+    if val is None or val == "":
+        return val
+    f = get_fernet()
+    return f.encrypt(val.encode("utf-8")).decode("utf-8")
+
+def decrypt_val(val: Optional[str]) -> Optional[str]:
+    if val is None or val == "":
+        return val
+    if not val.startswith("gAAAAA"):
+        return val
+    f = get_fernet()
+    try:
+        return f.decrypt(val.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return val
+
+def decrypt_member(member: Optional[Member]) -> Optional[Member]:
+    if member:
+        member.card_id = decrypt_val(member.card_id)
+        member.biometric_template_id = decrypt_val(member.biometric_template_id)
+    return member
+
 
 # --- Gym Settings CRUD ---
 def get_gym_settings(session: Session) -> Optional[GymSettings]:
@@ -93,15 +127,16 @@ def get_member_by_id(session: Session, member_id: int) -> Optional[Member]:
     return session.get(Member, member_id)
 
 def get_member_by_card_or_template(session: Session, card_id: Optional[str] = None, template_id: Optional[str] = None) -> Optional[Member]:
-    if card_id:
-        member = session.exec(select(Member).where(Member.card_id == card_id)).first()
-        if member:
-            return member
-    if template_id:
-        member = session.exec(select(Member).where(Member.biometric_template_id == template_id)).first()
-        if member:
-            return member
+    if not card_id and not template_id:
+        return None
+    members = session.exec(select(Member)).all()
+    for m in members:
+        if card_id and m.card_id == card_id:
+            return m
+        if template_id and m.biometric_template_id == template_id:
+            return m
     return None
+
 
 def create_member(
     session: Session,

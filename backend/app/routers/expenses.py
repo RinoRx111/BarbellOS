@@ -4,7 +4,10 @@ from sqlmodel import Session
 from app.db import get_session
 from app import crud, schemas
 
-router = APIRouter(prefix="/expenses", tags=["expenses"])
+from app.auth import get_current_session
+
+router = APIRouter(prefix="/expenses", tags=["expenses"], dependencies=[Depends(get_current_session)])
+
 
 @router.get("", response_model=List[schemas.ExpenseRead])
 def read_expenses(session: Session = Depends(get_session)):

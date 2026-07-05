@@ -445,7 +445,6 @@ export const SettingsView: React.FC = () => {
                 >
                   <option value="groq">Groq (Llama-3 70B - Ultra fast)</option>
                   <option value="openai">OpenAI (GPT-4o Mini)</option>
-                  <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
                   <option value="custom">Ollama (Local Llama-3 model)</option>
                 </select>
               </div>
@@ -476,18 +475,6 @@ export const SettingsView: React.FC = () => {
                 </div>
               )}
 
-              {aiProvider === 'anthropic' && (
-                <div className="form-group">
-                  <label className="form-label">Anthropic API Key</label>
-                  <input
-                    type="password"
-                    className="form-control"
-                    placeholder="sk-ant-..."
-                    value={anthropicKey}
-                    onChange={(e) => setAnthropicKey(e.target.value)}
-                  />
-                </div>
-              )}
 
               {aiProvider === 'custom' && (
                 <div className="form-group">

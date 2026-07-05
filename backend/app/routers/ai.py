@@ -11,14 +11,15 @@ from app.services.ai import call_llm
 from app.services.ai_config import get_ai_config, save_ai_config
 from app.services.audit import log_audit
 
-router = APIRouter(prefix="/ai", tags=["ai"])
+from app.auth import get_current_session
+
+router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Depends(get_current_session)])
 
 class ChatPayload(BaseModel):
     message: str
 
 class ConfirmPayload(BaseModel):
-    action: str
-    params: dict
+    confirm_id: str
 
 class AiConfigPayload(BaseModel):
     provider: str
@@ -37,15 +38,34 @@ def get_chat_history(session: Session = Depends(get_session)):
 
 @router.get("/config")
 def get_config():
-    return get_ai_config()
+    config = get_ai_config()
+    masked = {}
+    for k, v in config.items():
+        if k in ["api_key", "openai_key", "anthropic_key"]:
+            if v:
+                masked[k] = f"...{v[-4:]}" if len(v) >= 4 else "is_set"
+            else:
+                masked[k] = ""
+        else:
+            masked[k] = v
+    return masked
 
 @router.post("/config")
 def update_config(payload: AiConfigPayload):
+    current = get_ai_config()
+    
+    def resolve_key(new_val: Optional[str], old_val: str) -> str:
+        if new_val is None:
+            return ""
+        if new_val.startswith("...") or new_val == "is_set":
+            return old_val
+        return new_val
+
     save_ai_config({
         "provider": payload.provider,
-        "api_key": payload.api_key or "",
-        "openai_key": payload.openai_key or "",
-        "anthropic_key": payload.anthropic_key or "",
+        "api_key": resolve_key(payload.api_key, current.get("api_key", "")),
+        "openai_key": resolve_key(payload.openai_key, current.get("openai_key", "")),
+        "anthropic_key": resolve_key(payload.anthropic_key, current.get("anthropic_key", "")),
         "ollama_url": payload.ollama_url or "http://localhost:11434"
     })
     return {"message": "AI configuration updated successfully"}
@@ -73,8 +93,18 @@ async def chat_interaction(payload: ChatPayload, session: Session = Depends(get_
 
 @router.post("/confirm")
 def confirm_ai_action(payload: ConfirmPayload, session: Session = Depends(get_session)):
-    action = payload.action
-    params = payload.params
+    from app.services.ai import PENDING_ACTIONS
+    
+    confirm_id = payload.confirm_id
+    if confirm_id not in PENDING_ACTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired AI confirmation token."
+        )
+        
+    pending = PENDING_ACTIONS.pop(confirm_id)
+    action = pending["action"]
+    params = pending["params"]
     
     try:
         if action == "freeze_member":
@@ -132,3 +162,4 @@ def confirm_ai_action(payload: ConfirmPayload, session: Session = Depends(get_se
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to execute AI transaction: {str(e)}"
         )
+

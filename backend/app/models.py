@@ -1,6 +1,49 @@
 from datetime import date, datetime
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
+import base64
+import hashlib
+from cryptography.fernet import Fernet
+from app.config import settings
+from sqlalchemy import TypeDecorator, String
+
+def get_fernet() -> Fernet:
+    key_bytes = settings.SECRET_KEY.encode("utf-8")
+    hashed = hashlib.sha256(key_bytes).digest()
+    fernet_key = base64.urlsafe_b64encode(hashed)
+    return Fernet(fernet_key)
+
+def encrypt_val(val: Optional[str]) -> Optional[str]:
+    if val is None or val == "":
+        return val
+    f = get_fernet()
+    return f.encrypt(val.encode("utf-8")).decode("utf-8")
+
+def decrypt_val(val: Optional[str]) -> Optional[str]:
+    if val is None or val == "":
+        return val
+    if not val.startswith("gAAAAA"):
+        return val
+    f = get_fernet()
+    try:
+        return f.decrypt(val.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return val
+
+class EncryptedString(TypeDecorator):
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None or value == "":
+            return value
+        return encrypt_val(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None or value == "":
+            return value
+        return decrypt_val(value)
+
 
 class GymSettings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -35,8 +78,9 @@ class Member(SQLModel, table=True):
     expiry_date: date  # Computed at signup/renewal as join_date + plan duration
     frozen_from: Optional[date] = Field(default=None, nullable=True)
     frozen_until: Optional[date] = Field(default=None, nullable=True)
-    biometric_template_id: Optional[str] = Field(default=None, nullable=True)
-    card_id: Optional[str] = Field(default=None, nullable=True)
+    biometric_template_id: Optional[str] = Field(default=None, nullable=True, sa_type=EncryptedString)
+    card_id: Optional[str] = Field(default=None, nullable=True, sa_type=EncryptedString)
+
 
     # Relationships
     plan: Optional[Plan] = Relationship(back_populates="members")

@@ -12,10 +12,15 @@ export class ApiError extends Error {
   }
 }
 
+let authToken: string | null = null;
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
   
   const headers = new Headers(options.headers || {});
+  if (authToken) {
+    headers.set('Authorization', `Bearer ${authToken}`);
+  }
   if (!(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
@@ -51,6 +56,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  setToken: (token: string | null) => {
+    authToken = token;
+  },
   get: <T>(endpoint: string) => request<T>(endpoint, { method: 'GET' }),
   post: <T>(endpoint: string, body?: any) => request<T>(endpoint, {
     method: 'POST',
@@ -63,3 +71,4 @@ export const api = {
   delete: <T>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' }),
 };
 export default api;
+

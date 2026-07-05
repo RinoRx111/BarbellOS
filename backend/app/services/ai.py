@@ -7,17 +7,17 @@ from app.services.ai_config import get_ai_config
 from app.services import ai_tools
 from app.models import ChatMessage, Member, Plan, GymSettings
 
+# Pending actions store for validation
+PENDING_ACTIONS: Dict[str, Dict[str, Any]] = {}
+
 # System prompt assembly
 def build_system_prompt(session: Session) -> str:
     today_str = date.today().isoformat()
     gym = session.exec(select(GymSettings)).first()
     gym_name = gym.gym_name if gym else "BarbellOS"
     
-    # Load all members and plans to supply as context for name & ID resolution
-    members = session.exec(select(Member)).all()
+    # Load all plans to supply as context for name & ID resolution
     plans = session.exec(select(Plan)).all()
-    
-    members_context = "\n".join([f"- ID: {m.id}, Name: {m.name}, Phone: {m.phone}, Status: {m.status}, Expiry: {m.expiry_date.isoformat()}" for m in members])
     plans_context = "\n".join([f"- ID: {p.id}, Name: {p.name}, Price: INR {p.price}, Duration: {p.duration_days} days" for p in plans])
     
     return f"""You are the AI assistant for "{gym_name}", a local BarbellOS deployment. Today's date is {today_str}.
@@ -30,15 +30,13 @@ def build_system_prompt(session: Session) -> str:
     ### Available plans:
     {plans_context}
     
-    ### Members List:
-    {members_context}
-    
     CRITICAL RULES:
     1. If the owner asks to perform a WRITE action (e.g. freeze, log payment, add member), you MUST call the corresponding tool. Do NOT confirm the action in plain text. Propose it via the tool call so the system renders a Confirmation Card.
-    2. If the owner refers to a member by name (e.g., "Rahul"), look up their ID in the Members List above. If there is ambiguity (multiple members matching), do NOT make a tool call; instead ask the owner to clarify which member they mean by name/phone.
+    2. If the owner refers to a member by name, look up their details via read-only tools to find their ID. If there is ambiguity (multiple members matching), do NOT make a tool call; instead ask the owner to clarify which member they mean by name/phone.
     3. If time windows are undefined, default to 7 days (e.g. "Who is expiring?" -> look up next 7 days).
     4. Speak concisely.
     """
+
 
 # Tool schemas definition
 AI_TOOLS = [
@@ -179,26 +177,17 @@ def get_provider_details(config: dict) -> Tuple[str, str, Dict[str, str]]:
             "Content-Type": "application/json"
         }
     elif provider == "anthropic":
-        # Anthropic has its own headers, but we will wrap it into OpenAI endpoint if we can,
-        # or use standard Claude API. For simplicity and OpenAI compliance, let's connect
-        # to Anthropic's native completions or use OpenAI compatibility.
-        url = "https://api.anthropic.com/v1/messages"
-        headers = {
-            "x-api-key": config.get("anthropic_key", ""),
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json"
-        }
-        model = "claude-3-5-sonnet-20240620"
-        return "anthropic", url, headers
+        raise ValueError("Anthropic provider is not supported.")
     else:  # Default to Groq
         url = "https://api.groq.com/openai/v1/chat/completions"
-        model = "llama-3.3-70b-versatile"
+        model = "openai/gpt-oss-120b"
         headers = {
             "Authorization": f"Bearer {config.get('api_key')}",
             "Content-Type": "application/json"
         }
         
     return "openai_like", url, headers
+
 
 async def call_llm(session: Session, user_message: str) -> Dict[str, Any]:
     config = get_ai_config()
@@ -222,7 +211,7 @@ async def call_llm(session: Session, user_message: str) -> Dict[str, Any]:
         for _ in range(5):  # Limit tool execution turns to prevent infinite loops
             # Call completions
             if provider_type == "openai_like":
-                model_name = config.get("model_name") or ("llama3" if config.get("provider") == "custom" else ("gpt-4o-mini" if config.get("provider") == "openai" else "llama-3.3-70b-versatile"))
+                model_name = config.get("model_name") or ("llama3" if config.get("provider") == "custom" else ("gpt-4o-mini" if config.get("provider") == "openai" else "openai/gpt-oss-120b"))
                 payload = {
                     "model": model_name,
                     "messages": messages,
@@ -230,18 +219,12 @@ async def call_llm(session: Session, user_message: str) -> Dict[str, Any]:
                     "tool_choice": "auto"
                 }
             else:  # Anthropic handler
-                # Convert messages & tools to Anthropic format
-                # Anthropic doesn't support the exact same format, so for v1 we simplify to text
-                # (Or standard OpenAI wrapper. Standardizing on OpenAI makes this clean.)
-                # In production, Anthropic key handles tools if translated. For simplicity,
-                # let's fallback to plain text completions if it is Anthropic or raise key requirements.
                 payload = {
                     "model": "claude-3-5-sonnet-20240620",
                     "max_tokens": 1024,
                     "messages": [m for m in messages if m["role"] != "system"],
                     "system": messages[0]["content"]
                 }
-                # (To guarantee tools work, we default to Groq/OpenAI/Ollama which are 100% compliant)
                 
             try:
                 response = await client.post(url, headers=headers, json=payload, timeout=20.0)
@@ -264,60 +247,79 @@ async def call_llm(session: Session, user_message: str) -> Dict[str, Any]:
                     "content": content or "I couldn't process that query."
                 }
                 
-            # If tool calls exist
-            tool_call = tool_calls[0]
-            func_name = tool_call["function"]["name"]
-            func_args = json.loads(tool_call["function"]["arguments"])
-            
-            # Check if write tool (requires user confirmation)
+            # Check if any write tools exist in the list.
+            # If so, handle the first write tool found for user confirmation.
             write_tools = {"freeze_member", "log_payment", "add_member"}
-            if func_name in write_tools:
-                # Return confirmation payload to the frontend
+            write_tool_call = None
+            for tc in tool_calls:
+                if tc["function"]["name"] in write_tools:
+                    write_tool_call = tc
+                    break
+                    
+            if write_tool_call:
+                func_name = write_tool_call["function"]["name"]
+                func_args = json.loads(write_tool_call["function"]["arguments"])
+                import secrets
+                confirm_id = secrets.token_hex(16)
+                PENDING_ACTIONS[confirm_id] = {
+                    "action": func_name,
+                    "params": func_args,
+                    "tool_call_id": write_tool_call["id"]
+                }
                 return {
                     "status": "requires_confirmation",
                     "action": func_name,
                     "params": func_args,
-                    "tool_call_id": tool_call["id"]
+                    "confirm_id": confirm_id
                 }
                 
-            # Otherwise, execute read-only tool immediately
-            tool_result = {}
-            if func_name == "get_revenue_summary":
-                tool_result = ai_tools.get_revenue_summary(
-                    session,
-                    start_date=func_args.get("start_date"),
-                    end_date=func_args.get("end_date")
-                )
-            elif func_name == "get_expenses_summary":
-                tool_result = ai_tools.get_expenses_summary(
-                    session,
-                    start_date=func_args.get("start_date"),
-                    end_date=func_args.get("end_date")
-                )
-            elif func_name == "get_active_members":
-                tool_result = ai_tools.get_active_members(session)
-            elif func_name == "get_expiring_members":
-                tool_result = ai_tools.get_expiring_members(
-                    session,
-                    days=func_args.get("days", 7)
-                )
-            elif func_name == "get_attendance_trend":
-                tool_result = ai_tools.get_attendance_trend(
-                    session,
-                    days=func_args.get("days", 7)
-                )
+            # Otherwise, all tool calls are read-only. Process all of them.
+            executed_results = []
+            for tc in tool_calls:
+                func_name = tc["function"]["name"]
+                func_args = json.loads(tc["function"]["arguments"])
                 
-            # Append turn details to message history and loop
+                tool_result = {}
+                if func_name == "get_revenue_summary":
+                    tool_result = ai_tools.get_revenue_summary(
+                        session,
+                        start_date=func_args.get("start_date"),
+                        end_date=func_args.get("end_date")
+                    )
+                elif func_name == "get_expenses_summary":
+                    tool_result = ai_tools.get_expenses_summary(
+                        session,
+                        start_date=func_args.get("start_date"),
+                        end_date=func_args.get("end_date")
+                    )
+                elif func_name == "get_active_members":
+                    tool_result = ai_tools.get_active_members(session)
+                elif func_name == "get_expiring_members":
+                    tool_result = ai_tools.get_expiring_members(
+                        session,
+                        days=func_args.get("days", 7)
+                    )
+                elif func_name == "get_attendance_trend":
+                    tool_result = ai_tools.get_attendance_trend(
+                        session,
+                        days=func_args.get("days", 7)
+                    )
+                executed_results.append((tc, tool_result))
+                
+            # Append turn assistant message with all tool calls
             messages.append({
                 "role": "assistant",
                 "content": content,
-                "tool_calls": [tool_call]
+                "tool_calls": tool_calls
             })
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call["id"],
-                "name": func_name,
-                "content": json.dumps(tool_result)
-            })
+            # Append tool results for each tool call
+            for tc, res in executed_results:
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "name": tc["function"]["name"],
+                    "content": json.dumps(res)
+                })
+
             
     return {"status": "error", "message": "Max tool calls limit reached."}

@@ -5,7 +5,10 @@ from sqlmodel import Session
 from app.db import get_session
 from app import crud, schemas
 
-router = APIRouter(prefix="/payments", tags=["payments"])
+from app.auth import get_current_session
+
+router = APIRouter(prefix="/payments", tags=["payments"], dependencies=[Depends(get_current_session)])
+
 
 @router.get("", response_model=List[schemas.PaymentRead])
 def read_payments(session: Session = Depends(get_session)):

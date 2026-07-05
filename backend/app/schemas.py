@@ -26,6 +26,8 @@ class AdminUserRead(BaseModel):
     id: int
     name: str
     created_at: datetime
+    token: Optional[str] = None
+
 
 class PlanCreate(BaseModel):
     name: str

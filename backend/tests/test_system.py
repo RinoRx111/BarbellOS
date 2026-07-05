@@ -43,6 +43,13 @@ def client_fixture(session):
     yield client
     app.dependency_overrides.clear()
 
+@pytest.fixture(autouse=True)
+def reset_login_attempts():
+    from app.routers.auth import LOGIN_ATTEMPTS
+    LOGIN_ATTEMPTS["attempts"] = 0
+    LOGIN_ATTEMPTS["locked_until"] = None
+
+
 def test_derived_status_edge_cases(session):
     """
     Unit test for edge cases in derived member status calculations.
@@ -94,10 +101,16 @@ def test_access_control_integration(client, session):
     """
     Integration test for access control checking endpoint.
     """
+    # Onboard & Login to get token
+    client.post("/api/auth/setup", json={"name": "Owner", "pin": "1234"})
+    login_res = client.post("/api/auth/login", json={"pin": "1234"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
     plan = crud.create_plan(session, name="Access Monthly", duration_days=30, price=1000.0)
     
-    # 1. Test scanning an unregistered card ID
-    response = client.post("/api/attendance/scan", json={"card_id": "999-999-999", "method": "card"})
+    # 1. Test scanning an unregistered card ID (fails closed by default settings)
+    response = client.post("/api/attendance/scan", json={"card_id": "999-999-999", "method": "card"}, headers=headers)
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["access_granted"] is False
@@ -110,7 +123,7 @@ def test_access_control_integration(client, session):
     session.commit()
     
     # Test scanning active member
-    response = client.post("/api/attendance/scan", json={"card_id": "123-456-789", "method": "card"})
+    response = client.post("/api/attendance/scan", json={"card_id": "123-456-789", "method": "card"}, headers=headers)
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["access_granted"] is True
@@ -121,7 +134,7 @@ def test_access_control_integration(client, session):
     session.add(member)
     session.commit()
     
-    response = client.post("/api/attendance/scan", json={"card_id": "123-456-789", "method": "card"})
+    response = client.post("/api/attendance/scan", json={"card_id": "123-456-789", "method": "card"}, headers=headers)
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["access_granted"] is False
@@ -134,7 +147,7 @@ def test_access_control_integration(client, session):
     session.add(member)
     session.commit()
     
-    response = client.post("/api/attendance/scan", json={"card_id": "123-456-789", "method": "card"})
+    response = client.post("/api/attendance/scan", json={"card_id": "123-456-789", "method": "card"}, headers=headers)
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["access_granted"] is False
@@ -147,20 +160,32 @@ def test_complete_system_simulation_flow(client, session):
     # Step 1: Onboard the gym owner & configuration
     response = client.post("/api/auth/setup", json={"name": "Manager John", "pin": "9999"})
     assert response.status_code == 200
+    token = response.json()["token"]
+    assert token is not None
+    
+    headers = {"Authorization": f"Bearer {token}"}
     
     # Verify we can login
     response = client.post("/api/auth/login", json={"pin": "9999"})
     assert response.status_code == 200
+    token = response.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
     
-    # Setup Gym settings name
+    # Setup Gym settings name with fail_open policy
     settings_payload = {
         "gym_name": "Powerhouse Barbell",
         "owner_name": "Manager John",
         "phone": "9876543210",
         "access_policy": "fail_open"
     }
-    response = client.post("/api/settings", json=settings_payload)
+    response = client.post("/api/settings", json=settings_payload, headers=headers)
     assert response.status_code == 200
+    
+    # Test scan unrecognized card under fail_open policy (should grant access!)
+    response = client.post("/api/attendance/scan", json={"card_id": "unknown-card-id", "method": "card"}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["access_granted"] is True
+    assert "Fail-Open" in response.json()["reason"]
     
     # Step 2: Create membership subscription plans
     plan_monthly = crud.create_plan(session, name="Monthly Plan", duration_days=30, price=1500.0)
@@ -174,12 +199,12 @@ def test_complete_system_simulation_flow(client, session):
         "plan_id": plan_monthly.id,
         "join_date": date.today().isoformat()
     }
-    response = client.post("/api/members", json=member_payload)
+    response = client.post("/api/members", json=member_payload, headers=headers)
     assert response.status_code == 200
     member_id = response.json()["id"]
     
     # Step 4: Member checks in (Active)
-    response = client.post("/api/attendance/scan", json={"card_id": "bat-card-001", "method": "card"})
+    response = client.post("/api/attendance/scan", json={"card_id": "bat-card-001", "method": "card"}, headers=headers)
     assert response.status_code == 200
     assert response.json()["access_granted"] is True
     
@@ -190,7 +215,7 @@ def test_complete_system_simulation_flow(client, session):
     session.commit()
     
     # Member checks in (Expired) - Access Denied
-    response = client.post("/api/attendance/scan", json={"card_id": "bat-card-001", "method": "card"})
+    response = client.post("/api/attendance/scan", json={"card_id": "bat-card-001", "method": "card"}, headers=headers)
     assert response.status_code == 200
     assert response.json()["access_granted"] is False
     assert response.json()["reason"] == "Membership Expired"
@@ -202,11 +227,11 @@ def test_complete_system_simulation_flow(client, session):
         "amount": 1500.0,
         "method": "upi"
     }
-    response = client.post("/api/payments", json=payment_payload)
+    response = client.post("/api/payments", json=payment_payload, headers=headers)
     assert response.status_code == 200
     
     # Member checks in again (Active renewed)
-    response = client.post("/api/attendance/scan", json={"card_id": "bat-card-001", "method": "card"})
+    response = client.post("/api/attendance/scan", json={"card_id": "bat-card-001", "method": "card"}, headers=headers)
     assert response.status_code == 200
     assert response.json()["access_granted"] is True
     
@@ -223,13 +248,13 @@ def test_complete_system_simulation_flow(client, session):
         "date": date.today().isoformat(),
         "note": "Electricity bill"
     }
-    response_exp1 = client.post("/api/expenses", json=expense_payload_1)
+    response_exp1 = client.post("/api/expenses", json=expense_payload_1, headers=headers)
     assert response_exp1.status_code == 200
-    response_exp2 = client.post("/api/expenses", json=expense_payload_2)
+    response_exp2 = client.post("/api/expenses", json=expense_payload_2, headers=headers)
     assert response_exp2.status_code == 200
     
     # Step 8: Validate financial statement on Dashboard
-    response = client.get("/api/dashboard")
+    response = client.get("/api/dashboard", headers=headers)
     assert response.status_code == 200
     dashboard_data = response.json()
     assert dashboard_data["revenue_this_month"] == 1500.0 # From the renewal payment
@@ -237,7 +262,9 @@ def test_complete_system_simulation_flow(client, session):
     assert dashboard_data["net_profit"] == 400.0
     
     # Step 9: Propose member freeze via AI Confirmation Gate
-    confirm_payload = {
+    from app.services.ai import PENDING_ACTIONS
+    confirm_id = "batman-freeze-confirm"
+    PENDING_ACTIONS[confirm_id] = {
         "action": "freeze_member",
         "params": {
             "member_id": member_id,
@@ -245,11 +272,16 @@ def test_complete_system_simulation_flow(client, session):
             "frozen_until": (date.today() + timedelta(days=7)).isoformat()
         }
     }
-    response = client.post("/api/ai/confirm", json=confirm_payload)
+    
+    confirm_payload = {
+        "confirm_id": confirm_id
+    }
+    response = client.post("/api/ai/confirm", json=confirm_payload, headers=headers)
     assert response.status_code == 200
     
     # Step 10: Member checks in (Frozen) - Access Denied
-    response = client.post("/api/attendance/scan", json={"card_id": "bat-card-001", "method": "card"})
+    response = client.post("/api/attendance/scan", json={"card_id": "bat-card-001", "method": "card"}, headers=headers)
     assert response.status_code == 200
     assert response.json()["access_granted"] is False
     assert response.json()["reason"] == "Membership Frozen"
+

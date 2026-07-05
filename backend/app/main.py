@@ -26,14 +26,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for the local React app (usually runs on port 5173 or inside Electron file context)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For desktop local apps, allow * simplifies dev and Electron environment
-    allow_credentials=True,
+    allow_origins=["http://localhost:5173", "file://", "null"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Register API routers
 app.include_router(settings.router, prefix="/api")

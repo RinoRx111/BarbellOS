@@ -31,7 +31,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onSuccess }) => {
 
     try {
       // 1. Setup Admin Account
-      await api.post('/auth/setup', { name: ownerName, pin });
+      const response = await api.post<{ token?: string }>('/auth/setup', { name: ownerName, pin });
+      if (response && response.token) {
+        api.setToken(response.token);
+      }
+
       
       // 2. Setup Gym Settings
       await api.post('/settings', {
