@@ -57,7 +57,28 @@ function App() {
 
   useEffect(() => {
     checkOnboardStatus();
+
+    const handleTabChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setCurrentView(customEvent.detail);
+      }
+    };
+
+    const handleContextOpen = () => {
+      setIsAiOpen(true);
+    };
+
+
+    window.addEventListener('change-tab', handleTabChange);
+    window.addEventListener('change-tab-context', handleContextOpen);
+    return () => {
+      window.removeEventListener('change-tab', handleTabChange);
+      window.removeEventListener('change-tab-context', handleContextOpen);
+    };
   }, []);
+
+
 
   const handleUnlock = (name: string, token: string) => {
     api.setToken(token);

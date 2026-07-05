@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Calendar, CreditCard, Snowflake, Flame, Trash, Edit, ArrowLeft, Check, AlertTriangle } from 'lucide-react';
+import { Search, Plus, CreditCard, Snowflake, Flame, Trash, Edit, ArrowLeft, Check, AlertTriangle, Filter, Clock, Cpu } from 'lucide-react';
+
 import api from '../services/api';
+import { StatusTabs } from './SharedComponents';
+
 
 interface Plan {
   id: number;
@@ -53,6 +56,61 @@ export const MembersView: React.FC = () => {
   // Search & Filter
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterPlan, setFilterPlan] = useState<string>('all');
+
+  const getAvatarBg = (name: string) => {
+    const hash = name.split('').reduce((acc, char) => char.charCodeAt(0) + acc, 0);
+    const colors = [
+      'rgba(59, 130, 246, 0.15)',
+      'rgba(16, 185, 129, 0.15)',
+      'rgba(245, 158, 11, 0.15)',
+      'rgba(239, 68, 68, 0.15)',
+      'rgba(167, 139, 250, 0.15)'
+    ];
+    return colors[hash % colors.length];
+  };
+
+  const getAvatarColor = (name: string) => {
+    const hash = name.split('').reduce((acc, char) => char.charCodeAt(0) + acc, 0);
+    const colors = [
+      'var(--accent-primary)',
+      'var(--accent-success)',
+      'var(--accent-warning)',
+      'var(--accent-danger)',
+      '#a78bfa'
+    ];
+    return colors[hash % colors.length];
+  };
+
+  const getInitials = (name: string) => {
+    return name.trim().split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const getRelativeStatusTime = (member: Member) => {
+    if (member.status === 'frozen') {
+      if (member.frozen_until) {
+        return `frozen until ${new Date(member.frozen_until).toLocaleDateString()}`;
+      }
+      return 'frozen';
+    }
+    const days = Math.round((new Date(member.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (days < 0) {
+      return `expired ${Math.abs(days)} days ago`;
+    }
+    if (days === 0) {
+      return 'expires today';
+    }
+    return `expires in ${days} days`;
+  };
+
+  const statusCounts = {
+    all: members.length,
+    active: members.filter(m => m.status === 'active').length,
+    expired: members.filter(m => m.status === 'expired').length,
+    frozen: members.filter(m => m.status === 'frozen').length,
+  };
+
+
   
   // Form Modals State
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -106,6 +164,33 @@ export const MembersView: React.FC = () => {
   useEffect(() => {
     loadData().then(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const pendingId = localStorage.getItem('barbellos_open_member_file');
+    if (pendingId && members.length > 0) {
+      const mem = members.find(m => m.id === Number(pendingId));
+      if (mem) {
+        loadMemberDetails(mem);
+        localStorage.removeItem('barbellos_open_member_file');
+      }
+    }
+  }, [members]);
+
+  useEffect(() => {
+    const handleOpenMember = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const memberId = Number(customEvent.detail);
+      if (memberId && members.length > 0) {
+        const mem = members.find(m => m.id === memberId);
+        if (mem) {
+          loadMemberDetails(mem);
+        }
+      }
+    };
+    window.addEventListener('open-member-file', handleOpenMember);
+    return () => window.removeEventListener('open-member-file', handleOpenMember);
+  }, [members]);
+
 
   // Update payment amount when plan selection changes
   useEffect(() => {
@@ -303,8 +388,10 @@ export const MembersView: React.FC = () => {
   const filteredMembers = members.filter(m => {
     const matchesSearch = m.name.toLowerCase().includes(search.toLowerCase()) || m.phone.includes(search);
     const matchesStatus = filterStatus === 'all' ? true : m.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesPlan = filterPlan === 'all' ? true : m.plan_id === Number(filterPlan);
+    return matchesSearch && matchesStatus && matchesPlan;
   });
+
 
   if (loading) {
     return (
@@ -341,66 +428,99 @@ export const MembersView: React.FC = () => {
         )}
 
         {/* Toolbar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
-          {/* Search bar */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'rgba(0,0,0,0.2)',
-            border: 'var(--border-glass)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '0 1rem',
-            width: '320px'
-          }}>
-            <Search size={16} style={{ color: 'var(--text-muted)', marginRight: '0.75rem' }} />
-            <input
-              type="text"
-              placeholder="Search member name or phone..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-primary)',
-                padding: '0.75rem 0',
-                outline: 'none',
-                width: '100%',
-                fontSize: '0.9rem'
-              }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            {/* Status tabs switcher */}
+            <StatusTabs
+              activeTab={filterStatus}
+              tabs={[
+                { value: 'all', label: 'All' },
+                { value: 'active', label: 'Active' },
+                { value: 'frozen', label: 'Frozen' },
+                { value: 'expired', label: 'Expired' }
+              ]}
+              counts={statusCounts}
+              onChange={(val) => setFilterStatus(val)}
             />
+
+            {/* Results counter */}
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              <strong>{filteredMembers.length}</strong> of <strong>{members.length}</strong> results
+            </div>
+
+            <div style={{ flex: 1 }} />
+
+            {/* Prominent Add Member Button */}
+            <button
+              onClick={() => { resetAddForm(); setIsAddOpen(true); }}
+              className="btn btn-primary"
+              style={{
+                padding: '0.6rem 1.25rem',
+                fontSize: '0.85rem',
+                background: 'var(--accent-primary)',
+                borderColor: 'transparent',
+                boxShadow: 'var(--glow-primary)'
+              }}
+            >
+              <Plus size={16} />
+              Register Member
+            </button>
           </div>
 
-          {/* Status Filter */}
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            {['all', 'active', 'expired', 'frozen'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className="btn btn-flat"
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            {/* Search Input */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(0,0,0,0.2)',
+              border: 'var(--border-glass)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0 1rem',
+              width: '300px'
+            }}>
+              <Search size={16} style={{ color: 'var(--text-muted)', marginRight: '0.75rem' }} />
+              <input
+                type="text"
+                placeholder="Search member name or phone..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
                 style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.8rem',
-                  background: filterStatus === status ? 'rgba(255,255,255,0.05)' : 'transparent',
-                  borderColor: filterStatus === status ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  color: filterStatus === status ? 'var(--text-primary)' : 'var(--text-secondary)'
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-primary)',
+                  padding: '0.6rem 0',
+                  outline: 'none',
+                  width: '100%',
+                  fontSize: '0.85rem'
+                }}
+              />
+            </div>
+
+            {/* Dropdown Filter Affordance */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.2)', border: 'var(--border-glass)', borderRadius: 'var(--radius-sm)', padding: '0 0.75rem' }}>
+              <Filter size={14} style={{ color: 'var(--text-muted)' }} />
+              <select
+                value={filterPlan}
+                onChange={(e) => setFilterPlan(e.target.value)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-primary)',
+                  padding: '0.6rem 0',
+                  outline: 'none',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
                 }}
               >
-                {status.toUpperCase()}
-              </button>
-            ))}
+                <option value="all" style={{ background: '#0B0F19' }}>All Plans</option>
+                {plans.map(p => (
+                  <option key={p.id} value={p.id} style={{ background: '#0B0F19' }}>{p.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div style={{ flex: 1 }} />
-
-          {/* Add member btn */}
-          <button
-            onClick={() => { resetAddForm(); setIsAddOpen(true); }}
-            className="btn btn-primary"
-            style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem' }}
-          >
-            <Plus size={16} />
-            Register Member
-          </button>
         </div>
 
         {/* Members Grid/Table */}
@@ -411,8 +531,8 @@ export const MembersView: React.FC = () => {
                 <th>Member</th>
                 <th>Contact</th>
                 <th>Plan Assigned</th>
-                <th>Plan Expiration</th>
-                <th>Status</th>
+                <th>Status & Duration</th>
+                <th>Enrollment & Tags</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -424,64 +544,93 @@ export const MembersView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredMembers.map((member) => (
-                  <tr key={member.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '50%',
-                          background: 'rgba(255,255,255,0.03)',
-                          border: 'var(--border-glass)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.9rem',
-                          fontWeight: '600',
-                          color: 'var(--text-secondary)'
-                        }}>
-                          {member.name.charAt(0)}
+                filteredMembers.map((member) => {
+                  const avatarBg = getAvatarBg(member.name);
+                  const avatarCol = getAvatarColor(member.name);
+                  return (
+                    <tr key={member.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            background: avatarBg,
+                            border: `1px solid ${avatarCol}25`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.9rem',
+                            fontWeight: '600',
+                            color: avatarCol
+                          }}>
+                            {getInitials(member.name)}
+                          </div>
+                          <div>
+                            <div style={{ color: '#fff', fontWeight: '500' }}>{member.name}</div>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>ID: {member.id}</span>
+                          </div>
                         </div>
-                        <div>
-                          <div style={{ color: '#fff', fontWeight: '500' }}>{member.name}</div>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {member.id}</span>
+                      </td>
+                      <td>
+                        <div>{member.phone}</div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{member.email || 'No email'}</span>
+                      </td>
+                      <td>
+                        <span style={{ fontWeight: '500' }}>
+                          {plans.find(p => p.id === member.plan_id)?.name || 'Custom Plan'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span className={`badge badge-${member.status}`} style={{ width: 'fit-content' }}>{member.status}</span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <Clock size={10} />
+                            {getRelativeStatusTime(member)}
+                          </span>
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div>{member.phone}</div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{member.email || 'No email'}</span>
-                    </td>
-                    <td>
-                      <span style={{ fontWeight: '500' }}>
-                        {plans.find(p => p.id === member.plan_id)?.name || 'Custom Plan'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Calendar size={12} style={{ color: 'var(--text-muted)' }} />
-                        {new Date(member.expiry_date).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${member.status}`}>{member.status}</span>
-                    </td>
-                    <td>
-                      <button
-                        onClick={() => loadMemberDetails(member)}
-                        className="btn btn-flat"
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
-                      >
-                        Manage File
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          {member.biometric_template_id && (
+                            <span className="badge badge-active" style={{ fontSize: '0.65rem', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-success)' }}>
+                              Biometric
+                            </span>
+                          )}
+                          {member.card_id && (
+                            <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-primary)' }}>
+                              Card Enrolled
+                            </span>
+                          )}
+                          {!member.biometric_template_id && !member.card_id && (
+                            <span className="badge badge-expired" style={{ fontSize: '0.65rem' }}>
+                              Unenrolled
+                            </span>
+                          )}
+                          {member.status === 'frozen' && (
+                            <span className="badge badge-expired" style={{ fontSize: '0.65rem', background: 'rgba(245, 158, 11, 0.1)', color: 'var(--accent-warning)' }}>
+                              AI Freeze Action
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <button
+                          onClick={() => loadMemberDetails(member)}
+                          className="btn btn-flat"
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+                        >
+                          Manage File
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
+
       </div>
 
       {/* Details Side Drawer (Slides in on file click) */}
@@ -598,6 +747,31 @@ export const MembersView: React.FC = () => {
               <CreditCard size={14} />
               Log Payment
             </button>
+
+            <button
+              onClick={() => {
+                localStorage.setItem('barbellos_active_chat_context', JSON.stringify({
+                  memberId: selectedMember.id,
+                  name: selectedMember.name
+                }));
+                window.dispatchEvent(new CustomEvent('change-tab-context', {
+                  detail: { memberId: selectedMember.id, name: selectedMember.name }
+                }));
+              }}
+              className="btn btn-flat"
+              style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.8rem',
+                flex: '1 1 45%',
+                color: 'var(--accent-primary)',
+                borderColor: 'rgba(59, 130, 246, 0.3)',
+                background: 'rgba(59, 130, 246, 0.05)'
+              }}
+            >
+              <Cpu size={14} />
+              Ask AI about Member
+            </button>
+
 
             {selectedMember.status === 'frozen' ? (
               <button

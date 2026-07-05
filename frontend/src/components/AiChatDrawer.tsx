@@ -7,6 +7,7 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   created_at?: string;
+  executed_tools?: string[];
 }
 
 interface ChatSession {
@@ -29,6 +30,11 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
   const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Entities lists for pill matching
+  const [members, setMembers] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [activeContext, setActiveContext] = useState<{ memberId: number; name: string } | null>(null);
 
   const fetchSessions = async (selectFirst = false) => {
     try {
@@ -55,11 +61,33 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
 
   useEffect(() => {
     fetchSessions(true);
+    api.get<any[]>('/members').then(setMembers).catch(() => {});
+    api.get<any[]>('/plans').then(setPlans).catch(() => {});
+
+    // Check saved context
+    const saved = localStorage.getItem('barbellos_active_chat_context');
+    if (saved) {
+      try {
+        setActiveContext(JSON.parse(saved));
+      } catch {}
+    }
+
+    const handleContextUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setActiveContext(customEvent.detail);
+      }
+    };
+    window.addEventListener('change-tab-context', handleContextUpdate);
+
+    return () => {
+      window.removeEventListener('change-tab-context', handleContextUpdate);
+    };
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, pendingAction]);
+  }, [messages, pendingAction, loading]);
 
   const handleSelectSession = (id: number) => {
     if (loading) return;
@@ -138,18 +166,28 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
       const currentSess = sessions.find(s => s.id === currentSessionId);
       const isNewChat = currentSess?.title === 'New Chat';
 
+      // Append context details if active
+      const queryPayload = activeContext 
+        ? `[Context Member: ${activeContext.name}] ${userText}`
+        : userText;
+
       const res = await api.post<any>('/ai/chat', { 
-        message: userText,
+        message: queryPayload,
         session_id: currentSessionId
       });
       
       if (res.status === 'text') {
-        setMessages(prev => [...prev, { role: 'assistant', content: res.content }]);
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: res.content,
+          executed_tools: res.executed_tools
+        }]);
       } else if (res.status === 'requires_confirmation') {
         setPendingAction({
           action: res.action,
           params: res.params,
-          confirm_id: res.confirm_id
+          confirm_id: res.confirm_id,
+          executed_tools: res.executed_tools
         });
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: res.message || 'An error occurred.' }]);
@@ -193,6 +231,147 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
       case 'add_member': return 'Register Member Account';
       default: return 'Proposed Action';
     }
+  };
+
+  const getToolCallLabel = (toolName: string) => {
+    switch (toolName) {
+      case 'get_revenue_summary': return 'Calculating revenue for the selected period';
+      case 'get_expenses_summary': return 'Analyzing expense logs and summaries';
+      case 'get_active_members': return 'Retrieving active membership count';
+      case 'get_expiring_members': return 'Checking which memberships are expiring';
+      case 'get_attendance_trend': return 'Analyzing scanner attendance check-ins';
+      case 'freeze_member': return 'Preparing a freeze request for review';
+      case 'log_payment': return 'Preparing subscription payment registration';
+      case 'add_member': return 'Preparing new member registration details';
+      default: return `Running tool execution (${toolName})`;
+    }
+  };
+
+  const clearContext = () => {
+    setActiveContext(null);
+    localStorage.removeItem('barbellos_active_chat_context');
+  };
+
+  // Timeline Renderer
+  const renderTimeline = (tools?: string[]) => {
+    if (!tools || tools.length === 0) return null;
+    return (
+      <div style={{
+        marginTop: '6px',
+        marginBottom: '8px',
+        padding: '0.5rem 0.75rem',
+        background: 'rgba(0,0,0,0.18)',
+        border: 'var(--border-glass)',
+        borderRadius: 'var(--radius-sm)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        width: 'fit-content',
+        maxWidth: '100%'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+          <Cpu size={12} style={{ color: 'var(--accent-primary)' }} />
+          <strong>Reasoning steps resolved:</strong>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '8px', marginLeft: '5px' }}>
+          {tools.map((t, idx) => (
+            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--accent-success)' }} />
+              <span>{getToolCallLabel(t)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderBoldText = (text: string) => {
+    const regex = /(\*\*.*?\*\*|₹\d+(?:,\d+)*(?:\.\d+)?|\d+\s*(?:days|min|hours|results|members)?)/gi;
+    const parts = text.split(regex);
+    return parts.map((part, idx) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={idx} style={{ color: '#fff' }}>{part.slice(2, -2)}</strong>;
+      }
+      if (/^(?:₹\d|\d+)/i.test(part)) {
+        return <strong key={idx} style={{ color: '#fff' }}>{part}</strong>;
+      }
+      return part;
+    });
+  };
+
+  const formatAssistantResponse = (text: string) => {
+    const entities: { name: string; type: 'member' | 'plan'; id?: number }[] = [];
+    
+    plans.forEach(p => {
+      if (p.name && text.toLowerCase().includes(p.name.toLowerCase())) {
+        entities.push({ name: p.name, type: 'plan' });
+      }
+    });
+
+    members.forEach(m => {
+      if (m.name && text.toLowerCase().includes(m.name.toLowerCase())) {
+        entities.push({ name: m.name, type: 'member', id: m.id });
+      }
+    });
+
+    entities.sort((a, b) => b.name.length - a.name.length);
+
+    if (entities.length === 0) {
+      return renderBoldText(text);
+    }
+
+    let processedText = text;
+    const replacementMap: Record<string, typeof entities[0]> = {};
+    entities.forEach((ent, index) => {
+      const escapedName = ent.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const regex = new RegExp(`\\b${escapedName}\\b`, 'gi');
+      const key = `__ENTITY_${index}__`;
+      processedText = processedText.replace(regex, (match) => {
+        replacementMap[key] = { ...ent, name: match };
+        return key;
+      });
+    });
+
+    const tokens = processedText.split(/(__ENTITY_\d+__)/);
+    return tokens.map((tok, i) => {
+      if (tok.startsWith('__ENTITY_') && tok.endsWith('__') && replacementMap[tok]) {
+        const ent = replacementMap[tok];
+        const isMember = ent.type === 'member';
+        return (
+          <span
+            key={i}
+            onClick={() => {
+              if (isMember) {
+                window.dispatchEvent(new CustomEvent('change-tab', { detail: 'members' }));
+                if (ent.id) {
+                  localStorage.setItem('barbellos_open_member_file', String(ent.id));
+                  window.dispatchEvent(new CustomEvent('open-member-file', { detail: ent.id }));
+                }
+              } else {
+                window.dispatchEvent(new CustomEvent('change-tab', { detail: 'plans' }));
+              }
+            }}
+            className="badge"
+            style={{
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              margin: '0 2px',
+              padding: '0.15rem 0.4rem',
+              fontSize: '0.75rem',
+              background: isMember ? 'rgba(59, 130, 246, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+              color: isMember ? 'var(--accent-primary)' : 'var(--accent-success)',
+              border: isMember ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(16,185,129,0.3)',
+              borderRadius: '10px',
+              fontWeight: '600'
+            }}
+          >
+            {ent.name}
+          </span>
+        );
+      }
+      return renderBoldText(tok);
+    });
   };
 
   return (
@@ -249,7 +428,6 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
           <span>New Chat</span>
         </button>
 
-        {/* Scrollable session list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {sessions.map(s => {
             const isActive = s.id === currentSessionId;
@@ -399,11 +577,13 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
                 padding: '0.65rem 0.85rem',
                 color: m.role === 'user' ? '#fff' : 'var(--text-primary)',
                 fontSize: '0.85rem',
-                lineHeight: '1.4',
-                whiteSpace: 'pre-wrap'
+                lineHeight: '1.4'
               }}
             >
-              {m.content}
+              {m.role === 'assistant' && renderTimeline(m.executed_tools)}
+              <div style={{ whiteSpace: 'pre-wrap' }}>
+                {m.role === 'assistant' ? formatAssistantResponse(m.content) : m.content}
+              </div>
             </div>
           ))}
 
@@ -420,6 +600,8 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
               flexDirection: 'column',
               gap: '0.75rem'
             }}>
+              {renderTimeline(pendingAction.executed_tools)}
+              
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-warning)', fontSize: '0.85rem', fontWeight: 'bold' }}>
                 <ShieldAlert size={16} />
                 <span>{getActionTitle(pendingAction.action)}</span>
@@ -480,31 +662,72 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ onClose }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Form */}
+        {/* Input Form with Scope Context Selector */}
         <form onSubmit={handleSend} style={{
           padding: '1rem',
           borderTop: 'var(--border-glass)',
           background: 'rgba(0,0,0,0.2)',
           display: 'flex',
+          flexDirection: 'column',
           gap: '0.5rem'
         }}>
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Ask a question or request action..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={loading || pendingAction !== null || currentSessionId === null}
-            style={{ flex: 1, fontSize: '0.85rem' }}
-          />
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading || !input.trim() || pendingAction !== null || currentSessionId === null}
-            style={{ padding: '0.6rem', borderRadius: 'var(--radius-sm)' }}
-          >
-            <Send size={16} />
-          </button>
+          {/* Scope Indicator Chip */}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.7rem',
+              padding: '0.2rem 0.6rem',
+              borderRadius: '12px',
+              background: activeContext ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.04)',
+              color: activeContext ? 'var(--accent-primary)' : 'var(--text-secondary)',
+              border: activeContext ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid rgba(255,255,255,0.05)',
+              fontWeight: '500'
+            }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: activeContext ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
+              <span>Scope: {activeContext ? activeContext.name : 'General Context'}</span>
+              {activeContext && (
+                <button
+                  type="button"
+                  onClick={clearContext}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: '0.75rem',
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="text"
+              className="form-control"
+              placeholder={activeContext ? `Ask about member ${activeContext.name}...` : "Ask a question or request action..."}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={loading || pendingAction !== null || currentSessionId === null}
+              style={{ flex: 1, fontSize: '0.85rem' }}
+            />
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading || !input.trim() || pendingAction !== null || currentSessionId === null}
+              style={{ padding: '0.6rem', borderRadius: 'var(--radius-sm)' }}
+            >
+              <Send size={16} />
+            </button>
+          </div>
         </form>
       </div>
     </div>

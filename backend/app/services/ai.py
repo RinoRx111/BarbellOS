@@ -192,6 +192,7 @@ def get_provider_details(config: dict) -> Tuple[str, str, Dict[str, str]]:
 async def call_llm(session: Session, user_message: str, session_id: int) -> Dict[str, Any]:
     config = get_ai_config()
     provider_type, url, headers = get_provider_details(config)
+    executed_tools = []
     
     # 1. Fetch recent conversation history for this session (last 10 messages)
     history_logs = session.exec(
@@ -248,7 +249,8 @@ async def call_llm(session: Session, user_message: str, session_id: int) -> Dict
             if not tool_calls:
                 return {
                     "status": "text",
-                    "content": content or "I couldn't process that query."
+                    "content": content or "I couldn't process that query.",
+                    "executed_tools": executed_tools
                 }
                 
             # Check if any write tools exist in the list.
@@ -262,6 +264,7 @@ async def call_llm(session: Session, user_message: str, session_id: int) -> Dict
                     
             if write_tool_call:
                 func_name = write_tool_call["function"]["name"]
+                executed_tools.append(func_name)
                 func_args = json.loads(write_tool_call["function"]["arguments"])
                 import secrets
                 confirm_id = secrets.token_hex(16)
@@ -274,14 +277,17 @@ async def call_llm(session: Session, user_message: str, session_id: int) -> Dict
                     "status": "requires_confirmation",
                     "action": func_name,
                     "params": func_args,
-                    "confirm_id": confirm_id
+                    "confirm_id": confirm_id,
+                    "executed_tools": executed_tools
                 }
                 
             # Otherwise, all tool calls are read-only. Process all of them.
             executed_results = []
             for tc in tool_calls:
                 func_name = tc["function"]["name"]
+                executed_tools.append(func_name)
                 func_args = json.loads(tc["function"]["arguments"])
+
                 
                 tool_result = {}
                 if func_name == "get_revenue_summary":

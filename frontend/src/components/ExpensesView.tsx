@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash, Calendar, FileText } from 'lucide-react';
 import api from '../services/api';
+import { StatusTabs } from './SharedComponents';
 
 interface Expense {
   id: number;
@@ -12,6 +13,7 @@ interface Expense {
 
 export const ExpensesView: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
   
   // Add Fields
@@ -22,6 +24,7 @@ export const ExpensesView: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
 
   const fetchExpenses = async () => {
     try {
@@ -92,6 +95,20 @@ export const ExpensesView: React.FC = () => {
     }
   };
 
+  const filteredExpenses = expenses.filter(e => {
+    return filterCategory === 'all' ? true : e.category === filterCategory;
+  });
+
+  const categoryCounts = {
+    all: expenses.length,
+    rent: expenses.filter(e => e.category === 'rent').length,
+    equipment: expenses.filter(e => e.category === 'equipment').length,
+    salary: expenses.filter(e => e.category === 'salary').length,
+    utilities: expenses.filter(e => e.category === 'utilities').length,
+    maintenance: expenses.filter(e => e.category === 'maintenance').length,
+    other: expenses.filter(e => e.category === 'other').length,
+  };
+
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto', height: '100%' }}>
       {error && (
@@ -108,20 +125,52 @@ export const ExpensesView: React.FC = () => {
       )}
 
       {/* Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div>
-          <h3 style={{ color: '#fff', fontSize: '1.1rem' }}>Operating Expenses</h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Record bills, maintenance, salaries and rent to calculate net profits</p>
+          <h3 style={{ color: '#fff', fontSize: '1.1rem', margin: 0 }}>Operating Expenses</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>Record bills, maintenance, salaries and rent to calculate net profits</p>
         </div>
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => { resetForm(); setIsAddOpen(true); }}
-          className="btn btn-primary"
-          style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem' }}
-        >
-          <Plus size={16} />
-          Record Expense
-        </button>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          {/* Category Filter Tabs */}
+          <StatusTabs
+            activeTab={filterCategory}
+            tabs={[
+              { value: 'all', label: 'All' },
+              { value: 'rent', label: 'Rent' },
+              { value: 'equipment', label: 'Equipment' },
+              { value: 'salary', label: 'Salary' },
+              { value: 'utilities', label: 'Utilities' },
+              { value: 'maintenance', label: 'Maintenance' },
+              { value: 'other', label: 'Other' }
+            ]}
+            counts={categoryCounts}
+            onChange={(val) => setFilterCategory(val)}
+          />
+
+          {/* Results counter */}
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <strong>{filteredExpenses.length}</strong> of <strong>{expenses.length}</strong> results
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          {/* Prominent Log Expense button */}
+          <button
+            onClick={() => { resetForm(); setIsAddOpen(true); }}
+            className="btn btn-primary"
+            style={{
+              padding: '0.6rem 1.25rem',
+              fontSize: '0.85rem',
+              background: 'var(--accent-primary)',
+              borderColor: 'transparent',
+              boxShadow: 'var(--glow-primary)'
+            }}
+          >
+            <Plus size={16} />
+            Log Expense
+          </button>
+        </div>
       </div>
 
       {/* Expenses Table */}
@@ -137,14 +186,14 @@ export const ExpensesView: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {expenses.length === 0 ? (
+            {filteredExpenses.length === 0 ? (
               <tr>
                 <td colSpan={5} style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)' }}>
-                  No expense records logged this month.
+                  No expense records logged for this category.
                 </td>
               </tr>
             ) : (
-              expenses.map((expense) => (
+              filteredExpenses.map((expense) => (
                 <tr key={expense.id}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -189,6 +238,7 @@ export const ExpensesView: React.FC = () => {
           </tbody>
         </table>
       </div>
+
 
       {/* --- RECORD EXPENSE MODAL --- */}
       {isAddOpen && (
