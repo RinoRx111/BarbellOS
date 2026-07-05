@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Radio, Sparkles, Unlock, Lock, Sun, Moon } from 'lucide-react';
+import { Radio, Sparkles, Unlock, Lock } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
@@ -9,8 +9,6 @@ interface HeaderProps {
   isAiOpen: boolean;
   onToggleAi: () => void;
   adminName: string;
-  theme: 'dark' | 'light';
-  onToggleTheme: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,10 +18,9 @@ export const Header: React.FC<HeaderProps> = ({
   onManualOverride,
   isAiOpen,
   onToggleAi,
-  adminName,
-  theme,
-  onToggleTheme
+  adminName
 }) => {
+
   const [overrideLoading, setOverrideLoading] = useState(false);
 
 
@@ -60,30 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Connectivity & Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
         
-        {/* Theme Switcher Toggle Button */}
-        <button
-          type="button"
-          onClick={onToggleTheme}
-          className="btn btn-flat"
-          style={{
-            padding: '0.45rem',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '32px',
-            height: '32px',
-            cursor: 'pointer',
-            borderColor: 'var(--border-color)'
-          }}
-          title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-        >
-          {theme === 'dark' ? (
-            <Sun size={14} style={{ color: 'var(--accent-primary)' }} />
-          ) : (
-            <Moon size={14} style={{ color: 'var(--accent-primary)' }} />
-          )}
-        </button>
+
 
         {/* Biometric Reader Status */}
         <div style={{

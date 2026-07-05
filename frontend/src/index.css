@@ -36,31 +36,8 @@
   --chat-drawer-width: 380px;
 }
 
-body.light-theme {
-  /* Color Palette - Custom Bronze & Mint Light Theme */
-  --bg-dark: #FDFCF9;
-  --surface-dark: rgba(161, 222, 172, 0.45);
-  --surface-dark-solid: #A1DEAC;
-  --surface-light: rgba(117, 206, 167, 0.08);
-  
-  --accent-primary: #BF9A49;
-  --accent-primary-hover: #A28139;
-  --accent-success: #BF9A49;
-  --accent-success-hover: #A28139;
-  --accent-danger: #DC2626;
-  --accent-danger-hover: #B91C1C;
-  --accent-warning: #75CEA7;
-  
-  --text-primary: #1D180A;
-  --text-secondary: rgba(29, 24, 10, 0.65);
-  --text-muted: rgba(29, 24, 10, 0.45);
-  
-  /* Borders and Shadows */
-  --border-color: rgba(29, 24, 10, 0.12);
-  --shadow-glass: 0 8px 32px 0 rgba(29, 24, 10, 0.08);
-  --glow-primary: 0 0 15px rgba(191, 154, 73, 0.35);
-  --glow-success: 0 0 15px rgba(191, 154, 73, 0.35);
-}
+
+
 
 
 
