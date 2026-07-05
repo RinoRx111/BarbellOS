@@ -134,8 +134,24 @@ class Expense(SQLModel, table=True):
     date: date
     note: Optional[str] = Field(default=None, nullable=True)
 
+class ChatSession(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(default="New Chat")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    messages: List["ChatMessage"] = Relationship(
+        back_populates="session",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
 class ChatMessage(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: Optional[int] = Field(default=None, foreign_key="chatsession.id", nullable=True)
     role: str  # user | assistant | tool
     content: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    session: Optional[ChatSession] = Relationship(back_populates="messages")
+

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from app.db import get_session
-from app.models import ChatMessage, Member, Plan
+from app.models import ChatMessage, Member, Plan, ChatSession
 from app import crud
 from app.services.ai import call_llm
 from app.services.ai_config import get_ai_config, save_ai_config
@@ -15,8 +15,15 @@ from app.auth import get_current_session
 
 router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Depends(get_current_session)])
 
+class ChatSessionCreate(BaseModel):
+    title: str = "New Chat"
+
+class ChatSessionUpdate(BaseModel):
+    title: str
+
 class ChatPayload(BaseModel):
     message: str
+    session_id: int
 
 class ConfirmPayload(BaseModel):
     confirm_id: str
@@ -28,10 +35,63 @@ class AiConfigPayload(BaseModel):
     anthropic_key: Optional[str] = None
     ollama_url: Optional[str] = None
 
+@router.post("/sessions")
+def create_session(payload: ChatSessionCreate, session: Session = Depends(get_session)):
+    sess = ChatSession(title=payload.title)
+    session.add(sess)
+    session.commit()
+    session.refresh(sess)
+    return sess
+
+@router.get("/sessions")
+def get_sessions(session: Session = Depends(get_session)):
+    sessions = session.exec(
+        select(ChatSession).order_by(ChatSession.created_at.desc())
+    ).all()
+    if not sessions:
+        new_sess = ChatSession(title="New Chat")
+        session.add(new_sess)
+        session.commit()
+        session.refresh(new_sess)
+        sessions = [new_sess]
+    return sessions
+
+@router.put("/sessions/{session_id}")
+def update_session(session_id: int, payload: ChatSessionUpdate, session: Session = Depends(get_session)):
+    sess = session.get(ChatSession, session_id)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    sess.title = payload.title
+    session.add(sess)
+    session.commit()
+    session.refresh(sess)
+    return sess
+
+@router.delete("/sessions/{session_id}")
+def delete_session(session_id: int, session: Session = Depends(get_session)):
+    sess = session.get(ChatSession, session_id)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.delete(sess)
+    session.commit()
+    return {"message": "Session deleted successfully"}
+
 @router.get("/history")
-def get_chat_history(session: Session = Depends(get_session)):
+def get_chat_history(session_id: Optional[int] = None, session: Session = Depends(get_session)):
+    if session_id is None:
+        last_sess = session.exec(select(ChatSession).order_by(ChatSession.created_at.desc())).first()
+        if not last_sess:
+            last_sess = ChatSession(title="New Chat")
+            session.add(last_sess)
+            session.commit()
+            session.refresh(last_sess)
+        session_id = last_sess.id
+        
     messages = session.exec(
-        select(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(20)
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(30)
     ).all()
     # Return chronologically
     return [{"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at} for m in reversed(messages)]
@@ -75,21 +135,34 @@ async def chat_interaction(payload: ChatPayload, session: Session = Depends(get_
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="Empty query message.")
         
+    chat_sess = session.get(ChatSession, payload.session_id)
+    if not chat_sess:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+        
+    if chat_sess.title == "New Chat":
+        snippet = payload.message.strip()
+        if len(snippet) > 30:
+            snippet = snippet[:27] + "..."
+        chat_sess.title = snippet
+        session.add(chat_sess)
+        session.commit()
+
     # Save user message to database
-    user_msg = ChatMessage(role="user", content=payload.message)
+    user_msg = ChatMessage(role="user", content=payload.message, session_id=payload.session_id)
     session.add(user_msg)
     session.commit()
     
     # Process through LLM turning
-    response = await call_llm(session, payload.message)
+    response = await call_llm(session, payload.message, payload.session_id)
     
     if response["status"] == "text":
         # Save assistant text reply to database
-        assistant_msg = ChatMessage(role="assistant", content=response["content"])
+        assistant_msg = ChatMessage(role="assistant", content=response["content"], session_id=payload.session_id)
         session.add(assistant_msg)
         session.commit()
         
     return response
+
 
 @router.post("/confirm")
 def confirm_ai_action(payload: ConfirmPayload, session: Session = Depends(get_session)):

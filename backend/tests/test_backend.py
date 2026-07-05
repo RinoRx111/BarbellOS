@@ -257,17 +257,22 @@ def test_ai_endpoints_and_history(client, session):
     assert data["provider"] == "groq"
     assert data["api_key"] == "...tkey"
     
-    # 2. Add message directly
-    msg = models.ChatMessage(role="user", content="Hello AI")
+    # 2. Add message directly to a chat session
+    sess = models.ChatSession(title="Test Chat")
+    session.add(sess)
+    session.commit()
+    
+    msg = models.ChatMessage(role="user", content="Hello AI", session_id=sess.id)
     session.add(msg)
     session.commit()
     
     # Check history
-    response = client.get("/api/ai/history", headers=headers)
+    response = client.get(f"/api/ai/history?session_id={sess.id}", headers=headers)
     assert response.status_code == 200
     history = response.json()
     assert len(history) == 1
     assert history[0]["content"] == "Hello AI"
+
     
     # 3. Confirm write action (freeze_member)
     plan = crud.create_plan(session, name="Monthly Plan", duration_days=30, price=1000.0)

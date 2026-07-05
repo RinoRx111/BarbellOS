@@ -189,15 +189,19 @@ def get_provider_details(config: dict) -> Tuple[str, str, Dict[str, str]]:
     return "openai_like", url, headers
 
 
-async def call_llm(session: Session, user_message: str) -> Dict[str, Any]:
+async def call_llm(session: Session, user_message: str, session_id: int) -> Dict[str, Any]:
     config = get_ai_config()
     provider_type, url, headers = get_provider_details(config)
     
-    # 1. Fetch recent conversation history (last 10 messages)
+    # 1. Fetch recent conversation history for this session (last 10 messages)
     history_logs = session.exec(
-        select(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(10)
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(10)
     ).all()
     history_logs = list(reversed(history_logs))
+
     
     messages = [{"role": "system", "content": build_system_prompt(session)}]
     for h in history_logs:
